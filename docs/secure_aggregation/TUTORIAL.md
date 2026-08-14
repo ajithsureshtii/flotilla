@@ -476,6 +476,33 @@ Each of these has a dedicated regression test now
 `tests/unit/test_aggregator_fedavg.py`,
 `tests/unit/test_client_file_manager.py`).
 
+## 2.5 Post-rollout enhancement: dataset sizes are also secret-shared
+
+After Phase 4 shipped, a gap was closed: originally, `flo_server` learned
+every client's dataset size in the clear (via the pre-existing plaintext
+`InitBench`/`StartTraining` RPCs — the same mechanism `fedavg` still uses
+today) and sent each client's weight *fraction* to the parties on
+`RunAggregationRoundRequest.client_weights`. That field is now gone. In
+`secure_mpc` sessions, each client *also* secret-shares its raw dataset
+size, under a reserved `DATASET_SIZE_LAYER_NAME` pseudo-layer
+(`server/secure_agg/constants.py`) — summed and revealed by the exact same
+generic backend mechanism already used for model-weight layers, with
+**zero backend code changes** required (see Section 5.6 and Section 4.3's
+addendum on why). `aggregator_secure_mpc.py` now pops the revealed total
+and uses it as the division denominator; neither it nor any party ever
+learns an individual client's dataset size in `secure_mpc` mode.
+
+New/changed for this enhancement: `src/server/secure_agg/constants.py`
+(new); `client_secure_agg_manager.py` (also shares the pseudo-layer);
+`secure_agg.proto` (`client_weights` field removed, `reserved 4`, stubs
+regenerated); `party_orchestrator_client.py` (`run_round` now takes
+`client_ids`, not `client_weights`); `aggregator_secure_mpc.py` (pops and
+validates the revealed total instead of computing it from
+`training_state`); `backends/base.py`'s docstring (addendum); plus
+`tests/unit/test_client_secure_agg_manager.py` (new) and updates across
+the existing aggregator/integration/e2e tests. See `threat_model.md` for
+the updated protected/not-protected breakdown.
+
 ---
 
 # The core abstractions (the genericity layer)
@@ -688,8 +715,16 @@ Instead of pickling `model_weights` into the gRPC response,
    it into fixed-point integers.
 3. `Replicated3PCScheme.share()` splits each encoded tensor into 3
    `PartyShare` objects (one per party index).
-4. Build one `SubmitShareRequest` per party endpoint, each carrying only
-   *that* party's share of every layer (`TensorShare.share_payload =
+4. Also secret-share the client's **raw** (not pre-weighted) dataset size
+   itself, under the reserved `DATASET_SIZE_LAYER_NAME` pseudo-layer
+   (`server/secure_agg/constants.py`) — same codec, same sharing scheme,
+   treated as just another layer. This is what lets the party cluster sum
+   every checked-in client's dataset size and reveal only the round's
+   *total*, later, without flo_server or any party ever learning an
+   individual client's dataset size (see Section 10's "protected" list).
+5. Build one `SubmitShareRequest` per party endpoint, each carrying only
+   *that* party's share of every real layer plus the dataset-size
+   pseudo-layer (`TensorShare.share_payload =
    pickle.dumps(party_share.payload)`), and send it via
    `SecureAggPartyServiceStub.SubmitShare`.
 
@@ -727,9 +762,11 @@ aggregator plugin gets. It:
 2. Once every currently-selected, currently-active client has checked in,
    proceeds to trigger the round; otherwise returns `None` (exactly the
    "not ready yet" contract every aggregator plugin uses).
-3. Computes `client_weights` — each checked-in client's dataset-size
-   fraction of the round's total — purely for bookkeeping (parties don't
-   need it to sum shares; see Section 4.3).
+
+Unlike `aggregator_fedavg.py`, this function never looks up any client's
+dataset size from `training_state` — it doesn't know it, and doesn't need
+to (see Section 5.6). All it needs at this point is the list of checked-in
+`client_id`s to tell the parties which buffered shares to include.
 
 ## 5.5 `flo_server` triggers the round; every party runs its backend
 
@@ -750,7 +787,9 @@ concurrently (a small thread pool — deliberately synchronous, since
    while presenting an identical return contract.
 3. Clears its share buffer for this round (success or failure) and returns
    the revealed plaintext `OrderedDict[str, torch.Tensor]` — the **raw
-   weighted sum**, not yet divided by the total weight.
+   weighted sum** for every real model layer, plus the revealed
+   `DATASET_SIZE_LAYER_NAME` entry (the round's total dataset size), none of
+   it yet divided by that total.
 
 `run_round` requires **all** parties to respond successfully (unlike
 offline reconstruction, which only needs 2 of 3 shares — the *live*
@@ -759,24 +798,31 @@ protocol genuinely needs every party online and participating). If
 party revealed the identical plaintext before returning — a correctness/
 liveness sanity check for catching bugs, not a security guarantee.
 
-## 5.6 `flo_server` divides by total weight, exactly as `fedavg` would
+## 5.6 `flo_server` pops the revealed total and divides, exactly as `fedavg` would
 
-Back in `aggregator_secure_mpc.py`, the raw sum returned above is divided,
-in plaintext, by the sum of the checked-in clients' dataset sizes — the
-*only* "weighting" arithmetic secure aggregation still needs to do outside
-the MPC protocol, and it's trivial because it happens after reveal. The
-result is handed back to `server_session_manager.py` exactly like
-`aggregator_fedavg.aggregate()`'s return value always has been, and
-training proceeds — checkpointing, validation, and the next round's
-`StartTraining` dial-out are completely unaware secure aggregation was ever
-involved.
+Back in `aggregator_secure_mpc.py`, `raw_sum.pop(DATASET_SIZE_LAYER_NAME)`
+pulls out the revealed total dataset size (decoded, rounded to the nearest
+integer, and checked `> 0` — a round that revealed a non-positive total
+fails cleanly rather than dividing by it). Every remaining real layer is
+then divided, in plaintext, by that total — the *only* "weighting"
+arithmetic secure aggregation still needs to do outside the MPC protocol,
+trivial because it happens after reveal. Unlike Phases 0–4's original
+design, **flo_server never independently computes this total from
+plaintext dataset sizes — it only ever sees the value the MPC round itself
+revealed.** The result (with the pseudo-layer stripped out) is handed back
+to `server_session_manager.py` exactly like `aggregator_fedavg.aggregate()`'s
+return value always has been, and training proceeds — checkpointing,
+validation, and the next round's `StartTraining` dial-out are completely
+unaware secure aggregation was ever involved.
 
 ## 5.7 The whole thing as one diagram
 
 ```
 flo_client          trains locally (unchanged) -> plaintext state_dict
                      |
-                     | pre-weight by own dataset_size, encode, share
+                     | pre-weight by own dataset_size, encode, share.
+                     | ALSO secret-share the raw dataset_size itself under
+                     | the reserved DATASET_SIZE_LAYER_NAME pseudo-layer.
                      v
             SubmitShare x3 --------------------------------+
                |         |                                 |
@@ -784,17 +830,21 @@ flo_client          trains locally (unchanged) -> plaintext state_dict
       flo_secure_agg_party0   flo_secure_agg_party1   flo_secure_agg_party2
                ^         ^                                 ^
                |         |                                 |
-               +--- RunAggregationRound (triggered by flo_server) ---+
+               +--- RunAggregationRound (triggered by flo_server, --------+
+                    carries only client_ids -- no per-client weight)
                                    |
                                    v
                             flo_server (aggregator_secure_mpc.py)
-                     divides raw sum by total weight (plaintext, post-hoc)
+              pops the revealed DATASET_SIZE_LAYER_NAME total, divides every
+              other revealed layer by it (plaintext, post-hoc)
                      -> global_model (plaintext, same shape as today)
 ```
 
 `flo_server` sits only at the bottom: it triggers rounds and receives the
-final plaintext aggregate. It is never in the path a client's share
-travels.
+final plaintext aggregate, plus the round's total dataset size (used only
+as a division denominator, then discarded). It is never in the path a
+client's share — or dataset size — travels, and it never sends any
+per-client weight to the parties.
 
 ---
 
@@ -1466,11 +1516,17 @@ assertion.
    does mean shares travel unencrypted over the control plane unless
    hardened separately. hpmpc's own `USE_SSL=0` (Section 7.1) is likewise a
    dev/test choice, not production-hardened.
-4. **What is protected is narrower than "everything."** Only a client's
-   per-round local model update is hidden. Dataset sizes, training
-   metrics/loss, round participation, the resulting global model, and
-   model architecture/hyperparameters are all still plaintext, exactly as
-   in the original design — see `threat_model.md` for the full breakdown.
+4. **What is protected is narrower than "everything."** A client's
+   per-round local model update AND (in `secure_mpc` sessions) its dataset
+   size are hidden — the party cluster reveals only the round's *total*
+   dataset size, never an individual client's. Training metrics/loss,
+   round participation, the resulting global model, and model
+   architecture/hyperparameters are all still plaintext — see
+   `threat_model.md` for the full breakdown. This inherits the same
+   degenerate case the model update itself has: with only one client
+   checked in for a round, the revealed "total" IS that client's exact
+   dataset size — a property of sum-based aggregation privacy generally,
+   not a bug here.
 5. **Clients are trusted to secret-share honestly.** A malicious client
    could submit garbage shares — this is the same data-quality/poisoning
    exposure Flotilla's plaintext path already has today (a client can

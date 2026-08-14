@@ -10,10 +10,13 @@ see `src/proto/README.md`.
 
 Called by `flo_client` (via `client_secure_agg_manager.share_and_submit`),
 once per client per round, once per party endpoint (so 3 calls per client
-per round for a 3-party cluster). Carries one `TensorShare` per model layer;
-each `TensorShare.share_payload` is `pickle.dumps(PartyShare.payload)` for
-*that* party's share of that layer (already pre-weighted by the client's own
-dataset size — see [`design.md`](design.md)).
+per round for a 3-party cluster). Carries one `TensorShare` per model layer
+(already pre-weighted by the client's own dataset size — see
+[`design.md`](design.md)) **plus one more `TensorShare` for the reserved
+`DATASET_SIZE_LAYER_NAME` pseudo-layer** — the client's raw (not
+pre-weighted) dataset size, secret-shared the same way. Each
+`TensorShare.share_payload` is `pickle.dumps(PartyShare.payload)` for *that*
+party's share of that layer/pseudo-layer.
 
 The party rejects (`accepted=False`) if `sharing_scheme` doesn't match its
 own configured scheme — a config-mismatch guard, not a security boundary
@@ -28,11 +31,20 @@ thread pool. Requires **every** party to have already buffered a share for
 every `client_id` listed — if any is missing, the party responds
 `success=False` immediately rather than hanging (a live MPC round can't
 proceed with a client's share missing; see `docs/secure_aggregation/
-threat_model.md`'s "no fault tolerance" note). `client_weights` is carried
-for potential audit/logging use, but note the returned `aggregated_model` is
-the **raw, un-normalized** sum — `aggregator_secure_mpc.py` divides by
-`total` in plaintext after this returns (see `design.md`'s weighting
-discussion).
+threat_model.md`'s "no fault tolerance" note).
+
+`RunAggregationRoundRequest` carries only `client_ids` (which clients'
+buffered shares to include — round participation is still public, see
+`threat_model.md`), **not** any per-client weight. An earlier version of
+this message had a `client_weights` field (`map<string, double>`) sent by
+flo_server in the clear; it has been removed (field number 4 is `reserved`)
+because flo_server no longer knows any client's dataset size to put in it —
+see the `SubmitShare` change above. The returned `aggregated_model` is the
+**raw, un-normalized** sum for every real model layer, plus the revealed
+`DATASET_SIZE_LAYER_NAME` entry (the round's total dataset size, summed the
+same way) — `aggregator_secure_mpc.py` pops that entry and divides every
+other layer by it in plaintext after this returns (see `design.md`'s
+weighting discussion).
 
 ### `HealthCheck(HealthCheckRequest) -> HealthCheckResponse`
 

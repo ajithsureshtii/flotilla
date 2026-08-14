@@ -30,6 +30,7 @@ import pytest
 import proto.secure_agg_pb2 as secure_agg_pb2
 import proto.secure_agg_pb2_grpc as secure_agg_pb2_grpc
 from client import client_secure_agg_manager
+from server.secure_agg.constants import DATASET_SIZE_LAYER_NAME
 from server.secure_agg.party_orchestrator_client import run_round
 
 pytestmark = pytest.mark.e2e
@@ -113,10 +114,16 @@ def test_one_real_round_through_the_containerized_cluster(party_cluster):
     raw_sum = run_round(
         session_id=session_id,
         round_id=round_id,
-        client_weights={"e2e-client": 1.0},
+        client_ids=["e2e-client"],
         party_endpoints=PARTY_ENDPOINTS,
         timeout_s=15,
     )
 
     expected = state_dict["w"].numpy() * dataset_size
     assert np.allclose(raw_sum["w"].numpy(), expected, atol=1e-2)
+    # Real, containerized proof that the dataset size itself was secret-
+    # shared and revealed (never sent to the parties in the clear) by real
+    # Docker containers, not just in-process test doubles.
+    assert np.allclose(
+        raw_sum[DATASET_SIZE_LAYER_NAME].numpy(), [dataset_size], atol=1e-2
+    )

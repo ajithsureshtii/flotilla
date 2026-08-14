@@ -23,7 +23,7 @@ import proto.secure_agg_pb2 as secure_agg_pb2
 import proto.secure_agg_pb2_grpc as secure_agg_pb2_grpc
 
 
-def _call_one_party(endpoint, session_id, round_id, client_ids, client_weights, timeout_s):
+def _call_one_party(endpoint, session_id, round_id, client_ids, timeout_s):
     channel = grpc.insecure_channel(f"{endpoint['host']}:{endpoint['port']}")
     try:
         stub = secure_agg_pb2_grpc.SecureAggPartyServiceStub(channel)
@@ -32,7 +32,6 @@ def _call_one_party(endpoint, session_id, round_id, client_ids, client_weights, 
                 session_id=session_id,
                 round_id=round_id,
                 client_ids=client_ids,
-                client_weights=client_weights,
                 timeout_s=int(timeout_s),
             ),
             timeout=timeout_s,
@@ -50,7 +49,7 @@ def _call_one_party(endpoint, session_id, round_id, client_ids, client_weights, 
 def run_round(
     session_id,
     round_id,
-    client_weights,
+    client_ids,
     party_endpoints,
     timeout_s,
     verify_party_agreement=True,
@@ -58,7 +57,16 @@ def run_round(
     """Trigger RunAggregationRound on every party in `party_endpoints` and
     return the plaintext RAW (not yet divided by total weight — see
     backends/base.py's run_aggregation_round docstring) aggregate as an
-    OrderedDict[str, torch.Tensor].
+    OrderedDict[str, torch.Tensor], including the revealed
+    DATASET_SIZE_LAYER_NAME entry (see aggregator_secure_mpc.py, which pops
+    and uses it as the division total).
+
+    `client_ids`: which clients' buffered shares this round should include.
+    Deliberately NOT accompanied by per-client weights — flo_server doesn't
+    know any client's dataset size in secure_mpc mode (it's secret-shared,
+    see client_secure_agg_manager.py), so nothing plaintext-weight-shaped is
+    sent to the parties at all; round participation itself is still public
+    (see docs/secure_aggregation/threat_model.md).
 
     Requires ALL parties to respond successfully — the live MPC round
     genuinely needs every party's participation (unlike offline
@@ -71,8 +79,6 @@ def run_round(
     (see aggregator_args.verify_party_agreement in
     docs/secure_aggregation/design.md).
     """
-    client_ids = list(client_weights.keys())
-
     with ThreadPoolExecutor(max_workers=max(1, len(party_endpoints))) as pool:
         futures = {
             pool.submit(
@@ -81,7 +87,6 @@ def run_round(
                 session_id,
                 round_id,
                 client_ids,
-                client_weights,
                 timeout_s,
             ): endpoint
             for endpoint in party_endpoints

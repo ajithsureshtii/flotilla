@@ -1,4 +1,5 @@
 from server.secure_agg import party_orchestrator_client
+from server.secure_agg.constants import DATASET_SIZE_LAYER_NAME
 from utils.logger import FedLogger
 
 
@@ -18,15 +19,20 @@ def aggregate(
     same way via server/load_aggregator.py (session_config.aggregator:
     secure_mpc). Same call signature and same None/OrderedDict return
     contract as aggregator_fedavg.aggregate — but this function never
-    touches a client's plaintext weights. Clients secret-share their update
-    and submit shares directly to the party servers (see
-    client_secure_agg_manager.py, Phase 2); by the time this function is
-    called for a given client, that client's shares should already be
-    sitting in every party's share buffer. This function only tracks which
-    clients have "checked in" for the round and, once all expected clients
-    have, triggers the party cluster to run the round and reveal the
-    aggregate — it returns whatever that reveals, exactly like
-    aggregator_fedavg.aggregate returns its own plaintext computation.
+    touches a client's plaintext weights, and (unlike aggregator_fedavg.py)
+    never learns any client's plaintext dataset size either.
+    `training_state` is accepted only for call-signature parity with every
+    other aggregator plugin; it is not read here.
+
+    Clients secret-share their update AND their raw dataset size and submit
+    shares directly to the party servers (see client_secure_agg_manager.py);
+    by the time this function is called for a given client, that client's
+    shares should already be sitting in every party's share buffer. This
+    function only tracks which clients have "checked in" for the round and,
+    once all expected clients have, triggers the party cluster to run the
+    round and reveal the aggregate — it returns whatever that reveals,
+    exactly like aggregator_fedavg.aggregate returns its own plaintext
+    computation.
     """
     logger = FedLogger(id=session_id, loggername="AGGREGATOR")
     logger.info(
@@ -80,40 +86,46 @@ def aggregate(
         round_no = int(training_session.get(f"{session_id}.last_round_number"))
         round_id = f"{session_id}:{round_no}"
 
-        dataset_sizes = {
-            c: training_state.get(f"{c}.current_dataset_detail")["metadata"]["num_items"]
-            for c in checked_in_clients
-        }
-        total = sum(dataset_sizes.values())
-        client_weights = {c: n / total for c, n in dataset_sizes.items()}
-
         # Each client pre-multiplied its update by its own (raw) dataset size
         # before sharing (see client_secure_agg_manager.py) precisely so the
         # party cluster never needs to scalar-multiply a share by a
         # fractional weight — it only ever sums shares and reveals. What
         # comes back here is therefore the RAW weighted sum
-        # (sum(N_k * update_k)), not yet the average; dividing by `total` in
-        # plaintext here is the only "weighting" step left, and doing it
-        # post-hoc (after the round's actual participants are known) is what
-        # makes this correct under client dropouts, exactly like
-        # aggregator_fedavg.py's N_k weighting above.
+        # (sum(N_k * update_k)) for every real model layer, PLUS a revealed
+        # DATASET_SIZE_LAYER_NAME entry — sum(N_k) across every checked-in
+        # client, summed and revealed by the same generic mechanism, since
+        # clients secret-share their raw dataset size too (see
+        # client_secure_agg_manager.py). Neither flo_server nor any party
+        # ever learns an individual client's dataset size — only this
+        # round's total, which is exactly the denominator needed to turn the
+        # raw weighted sum into the final average, done here in plaintext
+        # after reveal, mirroring aggregator_fedavg.py's N_k weighting.
         raw_sum = party_orchestrator_client.run_round(
             session_id=session_id,
             round_id=round_id,
-            client_weights=client_weights,
+            client_ids=checked_in_clients,
             party_endpoints=args["party_endpoints"],
             timeout_s=args.get("round_timeout_s", 120),
             verify_party_agreement=args.get("verify_party_agreement", True),
         )
 
-        aggregated_model = (
-            type(raw_sum)((layer, tensor / total) for layer, tensor in raw_sum.items())
-            if raw_sum is not None
-            else None
+        total_dataset_size = round(float(raw_sum.pop(DATASET_SIZE_LAYER_NAME).item()))
+        if total_dataset_size <= 0:
+            raise RuntimeError(
+                f"round {round_id} revealed a non-positive total dataset size "
+                f"({total_dataset_size}); refusing to divide by it"
+            )
+
+        aggregated_model = type(raw_sum)(
+            (layer, tensor / total_dataset_size) for layer, tensor in raw_sum.items()
         )
 
         aggregator_state.clear()
         logger.info("fedserver.aggregator.secure_mpc.round_complete", round_id)
+        logger.info(
+            "fedserver.aggregator.secure_mpc.revealed_total_dataset_size",
+            f"{round_id},{total_dataset_size}",
+        )
         return aggregated_model
     except Exception as e:
         aggregator_state.clear()

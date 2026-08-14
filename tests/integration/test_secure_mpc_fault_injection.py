@@ -137,7 +137,6 @@ def test_round_fails_promptly_and_cleanly_when_a_party_is_killed_mid_round(
     client_selection_state.put("selected_clients", [client_id])
     training_session.put(f"{session_id}.last_round_number", 0)
     client_info.put(f"{client_id}.is_active", True)
-    training_state.put(f"{client_id}.current_dataset_detail", {"metadata": {"num_items": 100}})
 
     round_timeout_s = 5
     start = time.monotonic()
@@ -199,7 +198,6 @@ def test_a_subsequent_round_can_still_be_attempted_after_a_party_recovers(
     client_selection_state.put("selected_clients", [client_id])
     training_session.put(f"{session_id}.last_round_number", 0)
     client_info.put(f"{client_id}.is_active", True)
-    training_state.put(f"{client_id}.current_dataset_detail", {"metadata": {"num_items": 50}})
 
     result = aggregator_secure_mpc.aggregate(
         session_id=session_id,

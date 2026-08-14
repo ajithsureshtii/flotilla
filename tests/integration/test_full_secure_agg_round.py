@@ -11,6 +11,7 @@ from client import client_secure_agg_manager
 from server.aggregation import aggregator_secure_mpc
 from server.secure_agg.backends.backend_simulator import SimulatorBackend
 from server.secure_agg.backends.base import PartyEndpoint
+from server.secure_agg.constants import DATASET_SIZE_LAYER_NAME
 from server.secure_agg.fixed_point_codec import FixedPointCodec
 from server.secure_agg.party_server import SecureAggPartyServicer
 from server.secure_agg.sharing_schemes.replicated3pc import Replicated3PCScheme
@@ -128,10 +129,10 @@ def test_full_round_through_real_party_processes_matches_plaintext_fedavg(
     training_session.put(f"{session_id}.last_round_number", 7)
     for client_id in client_weights:
         client_info.put(f"{client_id}.is_active", True)
-        training_state.put(
-            f"{client_id}.current_dataset_detail",
-            {"metadata": {"num_items": dataset_sizes[client_id]}},
-        )
+    # NOTE: unlike aggregator_fedavg.py, aggregator_secure_mpc.py never reads
+    # current_dataset_detail -- each client secret-shared its own dataset
+    # size above (share_and_submit's dataset_size arg), and the round's
+    # total is revealed by the real MPC round itself.
 
     args = {"party_endpoints": party_endpoints, "round_timeout_s": 10}
 
@@ -151,7 +152,12 @@ def test_full_round_through_real_party_processes_matches_plaintext_fedavg(
         )
 
     assert result is not None
+    # The revealed total dataset size (100+50+25=175, computed by the real
+    # MPC round, never by flo_server) is used internally as the division
+    # denominator and must not leak into the final aggregated model.
+    assert DATASET_SIZE_LAYER_NAME not in result
     reference = fedavg_reference(client_weights, dataset_sizes)
+    assert set(result.keys()) == set(reference.keys())
 
     tolerance = len(client_weights) * (2**-FRAC_BITS) / 2 + 1e-3
     for layer_name, expected in reference.items():
@@ -174,9 +180,6 @@ def test_round_fails_cleanly_when_a_client_never_submitted_a_share(three_party_c
     client_selection_state.put("selected_clients", ["ghost-client"])
     training_session.put(f"{session_id}.last_round_number", 1)
     client_info.put("ghost-client.is_active", True)
-    training_state.put(
-        "ghost-client.current_dataset_detail", {"metadata": {"num_items": 10}}
-    )
 
     result = aggregator_secure_mpc.aggregate(
         session_id=session_id,

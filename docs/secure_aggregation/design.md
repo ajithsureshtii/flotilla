@@ -39,6 +39,24 @@ round's total weight happens in plaintext, post-hoc, in
 already computes its weights today, and automatically correct under client
 dropouts.
 
+**Post-rollout enhancement: dataset sizes are also secret-shared.**
+Originally (Phases 0–4), `flo_server` learned every client's dataset size
+in the clear via the existing plaintext `InitBench`/`StartTraining` RPCs and
+computed each client's weight fraction itself, sent to the parties on
+`RunAggregationRoundRequest.client_weights`. That field has been removed
+(see `proto_contract.md`) — in `secure_mpc` sessions, each client now
+*also* secret-shares its raw dataset size, under a reserved
+`DATASET_SIZE_LAYER_NAME` pseudo-layer (`server/secure_agg/constants.py`),
+summed and revealed by the exact same generic backend mechanism used for
+model-weight layers (see `backends/base.py`'s docstring) — no backend code
+changed at all to support this, which is exactly the payoff of the
+genericity layer being "any named tensor," not "model weights
+specifically." `aggregator_secure_mpc.py` pops the revealed total and uses
+it as the division denominator; neither it nor any party ever learns an
+individual client's dataset size in `secure_mpc` mode. See
+`threat_model.md` for the updated protected/not-protected breakdown
+(including the degenerate single-client-round caveat this inherits).
+
 ## Problem
 
 Flotilla today has exactly one central aggregation server

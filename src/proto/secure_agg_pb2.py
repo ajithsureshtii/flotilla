@@ -13,37 +13,33 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10secure_agg.proto\"V\n\x0bTensorShare\x12\x12\n\nlayer_name\x18\x01 \x01(\t\x12\r\n\x05shape\x18\x02 \x03(\x03\x12\r\n\x05\x64type\x18\x03 \x01(\t\x12\x15\n\rshare_payload\x18\x04 \x01(\x0c\"\x83\x01\n\x12SubmitShareRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x10\n\x08round_id\x18\x02 \x01(\t\x12\x11\n\tclient_id\x18\x03 \x01(\t\x12\x16\n\x0esharing_scheme\x18\x04 \x01(\t\x12\x1c\n\x06shares\x18\x05 \x03(\x0b\x32\x0c.TensorShare\"3\n\x0eSubmitShareAck\x12\x10\n\x08\x61\x63\x63\x65pted\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"\xe7\x01\n\x1aRunAggregationRoundRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x10\n\x08round_id\x18\x02 \x01(\t\x12\x12\n\nclient_ids\x18\x03 \x03(\t\x12\x46\n\x0e\x63lient_weights\x18\x04 \x03(\x0b\x32..RunAggregationRoundRequest.ClientWeightsEntry\x12\x11\n\ttimeout_s\x18\x05 \x01(\x05\x1a\x34\n\x12\x43lientWeightsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\"_\n\x1bRunAggregationRoundResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x18\n\x10\x61ggregated_model\x18\x02 \x01(\x0c\x12\x15\n\rerror_message\x18\x03 \x01(\t\"\x14\n\x12HealthCheckRequest\"8\n\x13HealthCheckResponse\x12\r\n\x05ready\x18\x01 \x01(\x08\x12\x12\n\nbackend_id\x18\x02 \x01(\t\"(\n\x14GetFinalShareRequest\x12\x10\n\x08round_id\x18\x01 \x01(\t\"[\n\x15GetFinalShareResponse\x12\r\n\x05ready\x18\x01 \x01(\x08\x12\x1c\n\x06shares\x18\x02 \x03(\x0b\x32\x0c.TensorShare\x12\x15\n\rerror_message\x18\x03 \x01(\t2\xde\x01\n\x15SecureAggPartyService\x12\x35\n\x0bSubmitShare\x12\x13.SubmitShareRequest\x1a\x0f.SubmitShareAck\"\x00\x12R\n\x13RunAggregationRound\x12\x1b.RunAggregationRoundRequest\x1a\x1c.RunAggregationRoundResponse\"\x00\x12:\n\x0bHealthCheck\x12\x13.HealthCheckRequest\x1a\x14.HealthCheckResponse\"\x00\x32X\n\x14SecureAggPeerService\x12@\n\rGetFinalShare\x12\x15.GetFinalShareRequest\x1a\x16.GetFinalShareResponse\"\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10secure_agg.proto\"V\n\x0bTensorShare\x12\x12\n\nlayer_name\x18\x01 \x01(\t\x12\r\n\x05shape\x18\x02 \x03(\x03\x12\r\n\x05\x64type\x18\x03 \x01(\t\x12\x15\n\rshare_payload\x18\x04 \x01(\x0c\"\x83\x01\n\x12SubmitShareRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x10\n\x08round_id\x18\x02 \x01(\t\x12\x11\n\tclient_id\x18\x03 \x01(\t\x12\x16\n\x0esharing_scheme\x18\x04 \x01(\t\x12\x1c\n\x06shares\x18\x05 \x03(\x0b\x32\x0c.TensorShare\"3\n\x0eSubmitShareAck\x12\x10\n\x08\x61\x63\x63\x65pted\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"o\n\x1aRunAggregationRoundRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x10\n\x08round_id\x18\x02 \x01(\t\x12\x12\n\nclient_ids\x18\x03 \x03(\t\x12\x11\n\ttimeout_s\x18\x05 \x01(\x05J\x04\x08\x04\x10\x05\"_\n\x1bRunAggregationRoundResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x18\n\x10\x61ggregated_model\x18\x02 \x01(\x0c\x12\x15\n\rerror_message\x18\x03 \x01(\t\"\x14\n\x12HealthCheckRequest\"8\n\x13HealthCheckResponse\x12\r\n\x05ready\x18\x01 \x01(\x08\x12\x12\n\nbackend_id\x18\x02 \x01(\t\"(\n\x14GetFinalShareRequest\x12\x10\n\x08round_id\x18\x01 \x01(\t\"[\n\x15GetFinalShareResponse\x12\r\n\x05ready\x18\x01 \x01(\x08\x12\x1c\n\x06shares\x18\x02 \x03(\x0b\x32\x0c.TensorShare\x12\x15\n\rerror_message\x18\x03 \x01(\t2\xde\x01\n\x15SecureAggPartyService\x12\x35\n\x0bSubmitShare\x12\x13.SubmitShareRequest\x1a\x0f.SubmitShareAck\"\x00\x12R\n\x13RunAggregationRound\x12\x1b.RunAggregationRoundRequest\x1a\x1c.RunAggregationRoundResponse\"\x00\x12:\n\x0bHealthCheck\x12\x13.HealthCheckRequest\x1a\x14.HealthCheckResponse\"\x00\x32X\n\x14SecureAggPeerService\x12@\n\rGetFinalShare\x12\x15.GetFinalShareRequest\x1a\x16.GetFinalShareResponse\"\x00\x62\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'secure_agg_pb2', globals())
 if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
-  _RUNAGGREGATIONROUNDREQUEST_CLIENTWEIGHTSENTRY._options = None
-  _RUNAGGREGATIONROUNDREQUEST_CLIENTWEIGHTSENTRY._serialized_options = b'8\001'
   _TENSORSHARE._serialized_start=20
   _TENSORSHARE._serialized_end=106
   _SUBMITSHAREREQUEST._serialized_start=109
   _SUBMITSHAREREQUEST._serialized_end=240
   _SUBMITSHAREACK._serialized_start=242
   _SUBMITSHAREACK._serialized_end=293
-  _RUNAGGREGATIONROUNDREQUEST._serialized_start=296
-  _RUNAGGREGATIONROUNDREQUEST._serialized_end=527
-  _RUNAGGREGATIONROUNDREQUEST_CLIENTWEIGHTSENTRY._serialized_start=475
-  _RUNAGGREGATIONROUNDREQUEST_CLIENTWEIGHTSENTRY._serialized_end=527
-  _RUNAGGREGATIONROUNDRESPONSE._serialized_start=529
-  _RUNAGGREGATIONROUNDRESPONSE._serialized_end=624
-  _HEALTHCHECKREQUEST._serialized_start=626
-  _HEALTHCHECKREQUEST._serialized_end=646
-  _HEALTHCHECKRESPONSE._serialized_start=648
-  _HEALTHCHECKRESPONSE._serialized_end=704
-  _GETFINALSHAREREQUEST._serialized_start=706
-  _GETFINALSHAREREQUEST._serialized_end=746
-  _GETFINALSHARERESPONSE._serialized_start=748
-  _GETFINALSHARERESPONSE._serialized_end=839
-  _SECUREAGGPARTYSERVICE._serialized_start=842
-  _SECUREAGGPARTYSERVICE._serialized_end=1064
-  _SECUREAGGPEERSERVICE._serialized_start=1066
-  _SECUREAGGPEERSERVICE._serialized_end=1154
+  _RUNAGGREGATIONROUNDREQUEST._serialized_start=295
+  _RUNAGGREGATIONROUNDREQUEST._serialized_end=406
+  _RUNAGGREGATIONROUNDRESPONSE._serialized_start=408
+  _RUNAGGREGATIONROUNDRESPONSE._serialized_end=503
+  _HEALTHCHECKREQUEST._serialized_start=505
+  _HEALTHCHECKREQUEST._serialized_end=525
+  _HEALTHCHECKRESPONSE._serialized_start=527
+  _HEALTHCHECKRESPONSE._serialized_end=583
+  _GETFINALSHAREREQUEST._serialized_start=585
+  _GETFINALSHAREREQUEST._serialized_end=625
+  _GETFINALSHARERESPONSE._serialized_start=627
+  _GETFINALSHARERESPONSE._serialized_end=718
+  _SECUREAGGPARTYSERVICE._serialized_start=721
+  _SECUREAGGPARTYSERVICE._serialized_end=943
+  _SECUREAGGPEERSERVICE._serialized_start=945
+  _SECUREAGGPEERSERVICE._serialized_end=1033
 # @@protoc_insertion_point(module_scope)

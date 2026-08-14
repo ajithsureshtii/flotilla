@@ -9,6 +9,14 @@ and docs/secure_aggregation/design.md for why: it lets every backend sum
 shares via plain addition (always free under additive/replicated sharing),
 with the final division-by-total happening in plaintext, after reveal, in
 aggregator_secure_mpc.py.
+
+The client's raw (unweighted) dataset size is ALSO secret-shared, under the
+reserved DATASET_SIZE_LAYER_NAME pseudo-layer, exactly like a model-weight
+layer — this is what lets the party cluster sum every checked-in client's
+dataset size (for free, via the same generic mechanism) and reveal only the
+round's TOTAL to flo_server, instead of flo_server or any party ever
+learning an individual client's dataset size. See
+docs/secure_aggregation/threat_model.md.
 """
 
 import pickle
@@ -18,6 +26,7 @@ import numpy as np
 
 import proto.secure_agg_pb2 as secure_agg_pb2
 import proto.secure_agg_pb2_grpc as secure_agg_pb2_grpc
+from server.secure_agg.constants import DATASET_SIZE_LAYER_NAME
 from server.secure_agg.fixed_point_codec import FixedPointCodec
 from server.secure_agg.load_sharing_scheme import load_sharing_scheme
 from utils.logger import FedLogger
@@ -63,6 +72,21 @@ def share_and_submit(
                     share_payload=pickle.dumps(party_share.payload),
                 )
             )
+
+    # Share the RAW (not pre-weighted by itself) dataset size too, under the
+    # reserved pseudo-layer name -- the party cluster sums it the same way
+    # it sums every real layer, so only the round's TOTAL is ever revealed,
+    # never this client's individual dataset size.
+    dataset_size_fixedpoint = codec.encode(np.array([float(dataset_size)], dtype=np.float64))
+    for party_share in scheme.share(dataset_size_fixedpoint, rng):
+        shares_by_party[party_share.party_index].append(
+            secure_agg_pb2.TensorShare(
+                layer_name=DATASET_SIZE_LAYER_NAME,
+                shape=[1],
+                dtype="float64",
+                share_payload=pickle.dumps(party_share.payload),
+            )
+        )
 
     for endpoint in party_endpoints:
         channel = grpc.insecure_channel(f"{endpoint['host']}:{endpoint['port']}")

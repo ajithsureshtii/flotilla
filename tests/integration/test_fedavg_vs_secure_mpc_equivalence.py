@@ -154,10 +154,9 @@ def _run_secure_mpc(client_weights, dataset_sizes, party_endpoints):
     training_session.put(f"{session_id}.last_round_number", 0)
     for client_id in client_weights:
         client_info.put(f"{client_id}.is_active", True)
-        training_state.put(
-            f"{client_id}.current_dataset_detail",
-            {"metadata": {"num_items": dataset_sizes[client_id]}},
-        )
+    # NOTE: unlike _run_fedavg above, aggregator_secure_mpc.py never reads
+    # current_dataset_detail -- each client secret-shared its own dataset
+    # size above, and the round's total is revealed by the real MPC round.
 
     result = None
     for client_id in client_weights:

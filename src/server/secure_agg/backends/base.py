@@ -76,15 +76,24 @@ class SecureAggregationBackend(ABC):
         Sidestepped instead by moving weighting to where it's free: the
         CLIENT already knows its own update and its own dataset size with no
         dependency on any other party, so it pre-multiplies its update by
-        that (plain, public, its-own-data) scalar BEFORE encoding/sharing
-        (see client_secure_agg_manager.py). Summing shares is then always
-        pure addition — free under additive/replicated sharing, no
-        truncation, no per-backend special-casing. The caller
-        (aggregator_secure_mpc.py) divides the returned raw sum by the total
-        weight of the round's checked-in clients in PLAINTEXT after reveal —
-        trivial arithmetic, computed post-hoc so it's automatically correct
-        under client dropouts, exactly mirroring how aggregator_fedavg.py
-        already computes its weights today.
+        that (its-own-data) scalar BEFORE encoding/sharing (see
+        client_secure_agg_manager.py). Summing shares is then always pure
+        addition — free under additive/replicated sharing, no truncation, no
+        per-backend special-casing. The caller (aggregator_secure_mpc.py)
+        divides the returned raw sum by the total dataset size of the
+        round's checked-in clients in PLAINTEXT after reveal — trivial
+        arithmetic, computed post-hoc so it's automatically correct under
+        client dropouts, exactly mirroring how aggregator_fedavg.py already
+        computes its weights today.
+
+        That total is itself a REVEALED value, not something flo_server
+        already knows: each client also secret-shares its raw dataset size
+        under the reserved DATASET_SIZE_LAYER_NAME pseudo-layer (see
+        constants.py), summed and revealed by this exact same mechanism
+        alongside every real model layer — this backend never needs to know
+        or care that one of its "layers" happens to be a dataset-size total
+        rather than a model weight, which is exactly what this interface's
+        genericity is for.
         """
 
     @abstractmethod

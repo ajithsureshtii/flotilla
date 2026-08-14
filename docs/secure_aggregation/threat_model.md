@@ -7,13 +7,15 @@ the hpmpc backend exists and was verified against real compiled binaries
 risk below was confirmed with an actual fault-injection test
 (`tests/integration/test_secure_mpc_fault_injection.py`), not just asserted.
 
-## Data flow (concrete as of Phase 2 — see `topology.md`, `proto_contract.md`)
+## Data flow (concrete as of Phase 2, dataset-size sharing added post-rollout — see `topology.md`, `proto_contract.md`)
 
 ```
 flo_client            trains locally (unchanged) -> plaintext state_dict
                        |
-                       | pre-weight by own dataset_size, encode, share
-                       | (client_secure_agg_manager.py)
+                       | pre-weight by own dataset_size, encode, share.
+                       | ALSO secret-share the raw dataset_size itself,
+                       | under the reserved DATASET_SIZE_LAYER_NAME
+                       | pseudo-layer (client_secure_agg_manager.py)
                        v
               SubmitShare x3  ---------------------------------+
                  |         |                                   |
@@ -21,17 +23,22 @@ flo_client            trains locally (unchanged) -> plaintext state_dict
         flo_secure_agg_party0   flo_secure_agg_party1   flo_secure_agg_party2
                  ^         ^                                   ^
                  |         |                                   |
-                 +--- RunAggregationRound (triggered by flo_server) ---+
+                 +--- RunAggregationRound (triggered by flo_server, ------+
+                      carries only client_ids -- no per-client weight)
                                      |
                                      v
                               flo_server (aggregator_secure_mpc.py)
-                       divides raw sum by total weight (plaintext, post-hoc)
+                     pops the revealed DATASET_SIZE_LAYER_NAME total, divides
+                     every other revealed layer by it (plaintext, post-hoc)
                        -> global_model (plaintext, same as today)
 ```
 
 `flo_server` sits only at the bottom of this diagram: it triggers rounds and
-receives the final plaintext aggregate, exactly like `aggregate()` returns
-today for `fedavg`. It is never in the path a client's share travels.
+receives the final plaintext aggregate (plus the round's total dataset
+size, used only as a division denominator and then discarded), exactly like
+`aggregate()` returns today for `fedavg`. It is never in the path a
+client's share — or dataset size — travels, and it does not send any
+per-client weight to the parties.
 
 ## Adversary model
 
@@ -59,12 +66,28 @@ today for `fedavg`. It is never in the path a client's share travels.
   anyone observing the network — only secret shares of it travel from
   client to each party, and only the final weighted aggregate is ever
   revealed (to all 3 parties, then reported up to `flo_server`).
+- **A client's per-round dataset size, in `secure_mpc` sessions.** The
+  client secret-shares its raw dataset size the same way it shares its
+  model update (under the reserved `DATASET_SIZE_LAYER_NAME` pseudo-layer —
+  see `client_secure_agg_manager.py`), so no single party server or
+  `flo_server` ever learns an individual client's dataset size — only the
+  round's **total** across all checked-in clients is ever revealed, and
+  only because `aggregator_secure_mpc.py` needs it as the division
+  denominator (see `design.md`'s weighting discussion). Note this is
+  `secure_mpc`-specific: a `fedavg` session still learns every client's
+  dataset size in the clear via the same pre-existing `InitBench`/
+  `StartTraining` RPCs it always has — this project doesn't touch that
+  path at all.
+  **Degenerate case:** as with the model update itself, this guarantee only
+  means something when enough clients participate in a round. If only one
+  client checks in, the "total" revealed IS that client's exact dataset
+  size (and the "aggregate" model update IS that client's exact update) —
+  an inherent property of any sum-based aggregation privacy scheme, not a
+  bug in this implementation. Operators relying on this protection should
+  ensure rounds have a meaningful minimum participant count.
 
 ## What is NOT protected (explicitly, so nobody assumes more than is delivered)
 
-- **Dataset sizes** — learned via the existing plaintext `InitBench`/
-  `StartTraining` RPCs and used as public aggregation weights, exactly as
-  today's `aggregator_fedavg.py` uses them. Not secret-shared.
 - **Training metrics/loss** — returned alongside the (shared) weights in
   `InitTrainResponse.metrics`, still plaintext; used by client-selection
   strategies and logging exactly as today.
