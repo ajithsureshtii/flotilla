@@ -18,6 +18,148 @@ services:
       - ./data:/mosquitto/data
       - ./log:/mosquitto/log
 
+  # Secure aggregation party cluster (see docs/secure_aggregation/topology.md).
+  # Control-plane ports (SubmitShare / RunAggregationRound, called by
+  # flo_client / flo_server) are on the shared flotilla-network like
+  # everything else above; each party's own inter-party wire protocol
+  # (backend_port) is additionally on secure-agg-network, an internal
+  # network flo_client/flo_server never need to join.
+  # Phase 4: built from the hpmpc-enabled multi-stage Dockerfile (compiles
+  # the real hpmpc party executables -- see
+  # docs/secure_aggregation/hpmpc_backend.md). Needs `additional_contexts`
+  # since hpmpc lives in a sibling directory to this repo. Set
+  # BACKEND_TYPE=simulator instead (and switch the dockerfile back to
+  # docker/Dockerfile.secure_agg_party) for a fast, no-C++-build dev loop --
+  # see docs/secure_aggregation/topology.md.
+  secure_agg_party0:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.secure_agg_party.hpmpc
+      additional_contexts:
+        hpmpc_src: ../../hpmpc
+    container_name: secure_agg_party0
+    environment:
+      PARTY_INDEX: 0
+      BIND_PORT: 50100
+      BACKEND_PORT: 51100
+      BACKEND_TYPE: hpmpc
+      PEERS_JSON: >-
+        [{"party_index":1,"host":"secure_agg_party1","backend_port":51101},
+        {"party_index":2,"host":"secure_agg_party2","backend_port":51102}]
+    ports:
+      - "50100:50100"
+    networks:
+      - default
+      - secure-agg-network
+
+  secure_agg_party1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.secure_agg_party.hpmpc
+      additional_contexts:
+        hpmpc_src: ../../hpmpc
+    container_name: secure_agg_party1
+    environment:
+      PARTY_INDEX: 1
+      BIND_PORT: 50101
+      BACKEND_PORT: 51101
+      BACKEND_TYPE: hpmpc
+      PEERS_JSON: >-
+        [{"party_index":0,"host":"secure_agg_party0","backend_port":51100},
+        {"party_index":2,"host":"secure_agg_party2","backend_port":51102}]
+    ports:
+      - "50101:50101"
+    networks:
+      - default
+      - secure-agg-network
+
+  secure_agg_party2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.secure_agg_party.hpmpc
+      additional_contexts:
+        hpmpc_src: ../../hpmpc
+    container_name: secure_agg_party2
+    environment:
+      PARTY_INDEX: 2
+      BIND_PORT: 50102
+      BACKEND_PORT: 51102
+      BACKEND_TYPE: hpmpc
+      PEERS_JSON: >-
+        [{"party_index":0,"host":"secure_agg_party0","backend_port":51100},
+        {"party_index":1,"host":"secure_agg_party1","backend_port":51101}]
+    ports:
+      - "50102:50102"
+    networks:
+      - default
+      - secure-agg-network
+
+  # flo_server / flo_client are NOT normally part of docker-compose (see
+  # topology.md) -- operators run them via docker/sample_docker_server_run.sh
+  # / sample_docker_client_run.sh against a real cluster instead. They're
+  # included here specifically to make the Phase 4 real end-to-end
+  # validation run (MNIST + LeNet5 + secure_mpc) reproducible; see
+  # docs/secure_aggregation/rollout_guide.md.
+  flo_server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.server
+    container_name: flo_server
+    environment:
+      MQTT_IP: mqtt5
+      MQTT_PORT: 1883
+      MQTT_TIMEOUT: 1
+      REDIS_IP: redis
+      REDIS_PORT: 6379
+      GRPC_TIMEOUT: 360
+    ports:
+      - "12345:12345"
+    volumes:
+      - ../models:/models
+      - ./mnist_data/val:/src/val_data
+    depends_on:
+      - redis
+      - mqtt5
+
+  flo_client0:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.client
+    container_name: flo_client0
+    environment:
+      MQTT_IP: mqtt5
+      MQTT_PORT: 1883
+    volumes:
+      - ./mnist_data/client0:/src/data
+    depends_on:
+      - mqtt5
+
+  flo_client1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.client
+    container_name: flo_client1
+    environment:
+      MQTT_IP: mqtt5
+      MQTT_PORT: 1883
+    volumes:
+      - ./mnist_data/client1:/src/data
+    depends_on:
+      - mqtt5
+
+  flo_client2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.client
+    container_name: flo_client2
+    environment:
+      MQTT_IP: mqtt5
+      MQTT_PORT: 1883
+    volumes:
+      - ./mnist_data/client2:/src/data
+    depends_on:
+      - mqtt5
+
 
 volumes:
   config:
@@ -28,3 +170,6 @@ volumes:
 networks:
   default:
     name: flotilla-network
+  secure-agg-network:
+    name: secure-agg-network
+    internal: true

@@ -1,0 +1,59 @@
+# Filled-in example: MNIST + LeNet5 + fedavg aggregator -- the plaintext
+# baseline to compare docker/training_config.secure_mpc.example.yaml
+# against (identical model/data/hyperparameters). See
+# docs/secure_aggregation/rollout_guide.md.
+
+session_config:
+  session_id: mnist_lenet5_fedavg
+  use_gpu: False
+  aggregator: fedavg
+  aggregator_args: None
+  client_selection: fedavg
+  client_selection_args:
+    client_fraction: 1
+  checkpoint_interval: 1000
+  validation_round_interval: 1
+  generate_plots: False
+
+benchmark_config:
+  skip_benchmark: True
+  model_id: LeNet5
+  model_dir: ../models/LeNet5
+  model_class: LeNet5_class
+  dataset: MNIST
+  bench_minibatch_count: 10
+  batch_size: 64
+  learning_rate: 0.01
+  timeout_duration_s: 60
+
+server_training_config:
+  model_dir: ../models/LeNet5
+  validation_dataset: MNIST
+  global_model_validation_batch_size: 100
+  num_training_rounds: 3
+
+client_training_config:
+  model_id: LeNet5
+  model_class: LeNet5_class
+  dataset: MNIST
+  epochs: 1
+  batch_size: 64
+  learning_rate: 0.01
+  train_timeout_duration_s: 180
+  loss_function: crossentropy
+  loss_function_custom: True
+  optimizer: adam
+  optimizer_custom: True
+
+model_config:
+  use_custom_dataloader: False
+  custom_loader_args: None
+
+  use_custom_trainer: False
+  custom_trainer_args: None
+
+  use_custom_validator: False
+  custom_validator_args: None
+
+  model_args:
+    num_classes: 10

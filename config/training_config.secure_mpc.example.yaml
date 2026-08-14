@@ -1,0 +1,74 @@
+# Filled-in example: MNIST + LeNet5 + secure_mpc aggregator, matching the
+# Phase 4 real end-to-end validation run (see
+# docs/secure_aggregation/rollout_guide.md). Submit with:
+#   python flo_session.py --config config/training_config.secure_mpc.example.yaml
+# against a stack with the 3 secure_agg_party containers up (docker-compose)
+# and clients whose client_config.yaml has secure_aggregation.enabled: True.
+#
+# Compare against training_config.fedavg.example.yaml (identical model/data/
+# hyperparameters, aggregator: fedavg, clients with secure_aggregation
+# disabled) to verify no functional regression from the toggle itself.
+
+session_config:
+  session_id: mnist_lenet5_secure_mpc
+  use_gpu: False
+  aggregator: secure_mpc
+  aggregator_args:
+    sharing_scheme: replicated3pc
+    num_parties: 3
+    party_endpoints:
+      - {party_index: 0, host: secure_agg_party0, port: 50100}
+      - {party_index: 1, host: secure_agg_party1, port: 50101}
+      - {party_index: 2, host: secure_agg_party2, port: 50102}
+    fixed_point: {bitlength: 64, frac_bits: 13}
+    round_timeout_s: 120
+    verify_party_agreement: True
+  client_selection: fedavg
+  client_selection_args:
+    client_fraction: 1
+  checkpoint_interval: 1000
+  validation_round_interval: 1
+  generate_plots: False
+
+benchmark_config:
+  skip_benchmark: True
+  model_id: LeNet5
+  model_dir: ../models/LeNet5
+  model_class: LeNet5_class
+  dataset: MNIST
+  bench_minibatch_count: 10
+  batch_size: 64
+  learning_rate: 0.01
+  timeout_duration_s: 60
+
+server_training_config:
+  model_dir: ../models/LeNet5
+  validation_dataset: MNIST
+  global_model_validation_batch_size: 100
+  num_training_rounds: 3
+
+client_training_config:
+  model_id: LeNet5
+  model_class: LeNet5_class
+  dataset: MNIST
+  epochs: 1
+  batch_size: 64
+  learning_rate: 0.01
+  train_timeout_duration_s: 180
+  loss_function: crossentropy
+  loss_function_custom: True
+  optimizer: adam
+  optimizer_custom: True
+
+model_config:
+  use_custom_dataloader: False
+  custom_loader_args: None
+
+  use_custom_trainer: False
+  custom_trainer_args: None
+
+  use_custom_validator: False
+  custom_validator_args: None
+
+  model_args:
+    num_classes: 10
