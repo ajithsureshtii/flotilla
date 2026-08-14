@@ -36,7 +36,7 @@ class StateManager:
     def deletebykey(self, key):
         deleter = self.state
         keys = key.split(".")
-        for k in keys[-1]:
+        for k in keys[:-1]:
             if k not in deleter:
                 return
             deleter = deleter[k]
