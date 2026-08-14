@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.hypothesis/
+.venv*/
+*.egg-info/
+logs/
+docker/log/
+docker/mnist_data/
+docker/data/
+.DS_Store

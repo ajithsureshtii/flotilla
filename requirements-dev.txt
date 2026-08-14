@@ -1,0 +1,8 @@
+# Test-only dependencies for the secure-aggregation work (see docs/secure_aggregation/).
+# Install alongside src/server/requirements.txt (numpy is already pinned there).
+# torch itself is provided by docker/Dockerfile.server's pytorch/pytorch base
+# image; install it separately (e.g. `pip install torch --index-url
+# https://download.pytorch.org/whl/cpu`) if running tests outside that image.
+pytest==8.2.0
+pytest-asyncio==0.23.7
+hypothesis==6.103.0
