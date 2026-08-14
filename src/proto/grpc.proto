@@ -93,10 +93,11 @@ message InitBenchResponse {
 
 message InitTrainResponse{
   string model_id = 1;
-  bytes model_weights = 2;
+  optional bytes model_weights = 2; // absent when secure_agg_used == true; see secure_agg.proto
   string client_id = 3;
   int32 round_idx = 4;
   bytes metrics = 5;
+  bool secure_agg_used = 6;
 }
 
 message InitValidationResponse{

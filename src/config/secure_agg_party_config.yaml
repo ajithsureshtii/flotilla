@@ -1,0 +1,38 @@
+# Working local-dev default for party 0. For a real 3-process local run,
+# override PARTY_INDEX / BIND_PORT / BACKEND_PORT / PEERS_JSON per process
+# (see flo_secure_agg_party.py) rather than hand-editing 3 copies of this file.
+
+party_index: 0
+num_parties: 3
+bind_host: 0.0.0.0
+bind_port: 50100
+backend_port: 51100
+
+peers:
+  - party_index: 1
+    host: localhost
+    backend_port: 51101
+  - party_index: 2
+    host: localhost
+    backend_port: 51102
+
+sharing_scheme: replicated3pc
+fixed_point:
+  bitlength: 64
+  frac_bits: 13
+
+backend:
+  type: simulator   # switch to hpmpc (or set BACKEND_TYPE=hpmpc) once executables are built --
+                     # see hpmpc/scripts/build_fedavg_secure_aggregation.sh
+  simulator:
+    bind_host: 0.0.0.0
+  hpmpc:
+    executable_dir: /opt/hpmpc/executables
+    tmp_dir: /tmp/secure_agg
+
+state:
+  state_location: inmemory
+  state_hostname: localhost
+  state_port: 6379
+
+grpc_workers: 8

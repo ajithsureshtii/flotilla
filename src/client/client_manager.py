@@ -94,6 +94,12 @@ class ClientManager:
             "cleanup_temp_on_exit"
         ]
 
+        # See docs/secure_aggregation/design.md. Missing/absent block means
+        # disabled -- today's plaintext path, unchanged.
+        self.secure_aggregation_config: dict = client_config.get(
+            "secure_aggregation", {"enabled": False}
+        )
+
         # setting up client logger
         self.logger = FedLogger(id=self.client_id, loggername="CLIENT_MANAGER")
 
@@ -130,6 +136,7 @@ class ClientManager:
                 torch_device=self.torch_device,
                 dataset_paths=self.dataset_paths,
                 client_info=self.client_info,
+                secure_aggregation_config=self.secure_aggregation_config,
             ),
             sync_server,
         )

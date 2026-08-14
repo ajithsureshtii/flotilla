@@ -669,7 +669,15 @@ class FloSessionManager:
     def grpc_train_callback(self, client_id, start_time, response):
         if response:
             metrics = pickle.loads(response.metrics)
-            local_model_wts = pickle.loads(response.model_weights)
+            # Secure-agg clients (response.secure_agg_used) never populate
+            # model_weights -- their update went directly to the party
+            # servers as secret shares, never through flo_server. See
+            # docs/secure_aggregation/design.md.
+            local_model_wts = (
+                pickle.loads(response.model_weights)
+                if response.HasField("model_weights")
+                else None
+            )
             round_no = response.round_idx
 
             log_str_keys = "-".join(metrics.keys())
@@ -691,7 +699,8 @@ class FloSessionManager:
             )
 
             self.training_state.put(f"{client_id}.last_round_participated", round_no)
-            self.training_state.put(f"{client_id}.weights", local_model_wts)
+            if local_model_wts is not None:
+                self.training_state.put(f"{client_id}.weights", local_model_wts)
 
             training_metrics = self.training_state.get(f"{client_id}.training_metrics")
             if training_metrics is None:

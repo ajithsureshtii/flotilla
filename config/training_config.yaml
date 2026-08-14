@@ -3,6 +3,19 @@ session_config:
   use_gpu: <True/False>
   aggregator: <aggregator_from_src/server/aggregation>
   aggregator_args: <any_arguments_for_the_aggregator>
+  # If aggregator is "secure_mpc" (see docs/secure_aggregation/design.md),
+  # aggregator_args must instead have this shape -- clients also need a
+  # matching secure_aggregation block in their own client_config.yaml:
+  #   aggregator_args:
+  #     sharing_scheme: replicated3pc
+  #     num_parties: 3
+  #     party_endpoints:
+  #       - {party_index: 0, host: <party0_host>, port: <party0_bind_port>}
+  #       - {party_index: 1, host: <party1_host>, port: <party1_bind_port>}
+  #       - {party_index: 2, host: <party2_host>, port: <party2_bind_port>}
+  #     fixed_point: {bitlength: 64, frac_bits: 13}
+  #     round_timeout_s: 120
+  #     verify_party_agreement: True
   client_selection: <client_selection_from_src/server/clientselection>
   client_selection_args: <any_arguments_for_the_clientselection>
   checkpoint_interval: <num_of_rounds_to_checkpoint_after>

@@ -1,0 +1,41 @@
+# Config for one secure-aggregation party process (src/flo_secure_agg_party.py).
+# Run this file 3 times (once per party) -- see docs/secure_aggregation/topology.md.
+# The handful of fields that legitimately differ per party can also be set via
+# env vars (PARTY_INDEX, BIND_PORT, BACKEND_PORT, PEERS_JSON as a JSON string,
+# BACKEND_TYPE) so the SAME checked-in file can be reused across all 3
+# containers -- see docker/docker-compose.yaml and
+# flo_secure_agg_party.py's _apply_env_overrides.
+
+party_index: <0, 1, or 2>
+num_parties: 3
+bind_host: 0.0.0.0
+bind_port: <control_plane_port>    # SecureAggPartyService: SubmitShare / RunAggregationRound
+backend_port: <backend_wire_port>  # this backend's own inter-party protocol port
+
+peers:                              # the OTHER parties, by index
+  - party_index: <peer_a_index>
+    host: <peer_a_host>
+    backend_port: <peer_a_backend_port>
+  - party_index: <peer_b_index>
+    host: <peer_b_host>
+    backend_port: <peer_b_backend_port>
+
+sharing_scheme: replicated3pc
+fixed_point:
+  bitlength: 64
+  frac_bits: 13
+
+backend:
+  type: simulator   # simulator (Phase 2) | hpmpc (Phase 3) -- see hpmpc_backend.md
+  simulator:
+    bind_host: 0.0.0.0   # optional; defaults to the top-level bind_host above
+  hpmpc:
+    executable_dir: <path_to_hpmpc/executables>   # e.g. /opt/hpmpc/executables in the container
+    tmp_dir: <scratch_dir_for_per-round_input/output_files>  # e.g. /tmp/secure_agg
+
+state:
+  state_location: inmemory
+  state_hostname: <redis_ip_if_used>
+  state_port: <redis_port_if_used>
+
+grpc_workers: 8

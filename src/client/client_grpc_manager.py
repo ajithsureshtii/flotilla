@@ -15,8 +15,9 @@ from typing_extensions import OrderedDict
 
 import proto.grpc_pb2 as grpc_pb2
 import proto.grpc_pb2_grpc as grpc_pb2_grpc
+from client import client_secure_agg_manager
 from client.client import Client
-from client.client_file_manager import setup_model_dir
+from client.client_file_manager import get_dataset_details, setup_model_dir
 from utils.logger import FedLogger
 
 
@@ -28,10 +29,14 @@ class ClientGRPCManager(grpc_pb2_grpc.EdgeServiceServicer):
         torch_device: str,
         dataset_paths: str,
         client_info: dict,
+        secure_aggregation_config: dict = None,
     ) -> None:
         self.logger = FedLogger(id=client_id, loggername="CLIENT_GRPC_MANAGER")
         self.temp_dir_path = temp_dir_path
         self.client_id = client_id
+        # See docs/secure_aggregation/design.md. Defaults to disabled so a
+        # client_config.yaml without this block behaves exactly as before.
+        self.secure_aggregation_config = secure_aggregation_config or {"enabled": False}
 
         self.client = Client(
             client_id=self.client_id,
@@ -143,6 +148,7 @@ class ClientGRPCManager(grpc_pb2_grpc.EdgeServiceServicer):
         self.logger.info("fedclient.gRPC.train.init", "")
         grpc_train_time = time()
 
+        session_id: str = request.session_id
         model_id: str = request.model_id
         model_class: str = request.model_class
         model_config: dict = p_loads(request.model_config)
@@ -191,20 +197,56 @@ class ClientGRPCManager(grpc_pb2_grpc.EdgeServiceServicer):
             max_mini_batches=max_mini_batches,
         )
 
-        pickle_time = time()
-        model_weights = p_dumps(model_weights)
         metrics = p_dumps(result)
-        self.logger.info(
-            "fedclient.gRPC.train.round.pickle.weights", f"{time()-pickle_time}"
-        )
 
-        response = grpc_pb2.InitTrainResponse(
-            model_id=model_id,
-            model_weights=model_weights,
-            client_id=self.client_id,
-            round_idx=round_id,
-            metrics=metrics,
-        )
+        if self.secure_aggregation_config.get("enabled", False):
+            # Secret-share model_weights directly to the party servers
+            # instead of sending it (even encrypted) through flo_server --
+            # see docs/secure_aggregation/design.md. flo_server never sees
+            # this client's plaintext (or shared) update.
+            # get_dataset_details returns the flat dict written by
+            # utils/get_data_summary.py ({"label_distribution", "num_items",
+            # "data_filename"} at the top level) -- NOT the "metadata"-nested
+            # shape server-side current_dataset_detail uses (a different,
+            # unrelated dict from server_session_manager.py); don't confuse
+            # the two.
+            dataset_size = get_dataset_details(self.client.dataset_paths[dataset_id])[
+                "num_items"
+            ]
+            client_secure_agg_manager.share_and_submit(
+                client_id=self.client_id,
+                session_id=session_id,
+                round_id=f"{session_id}:{round_id}",
+                state_dict=model_weights,
+                dataset_size=dataset_size,
+                sharing_scheme_name=self.secure_aggregation_config["sharing_scheme"],
+                fixed_point_config=self.secure_aggregation_config["fixed_point"],
+                party_endpoints=self.secure_aggregation_config["party_endpoints"],
+                submission_timeout_s=self.secure_aggregation_config.get(
+                    "submission_timeout_s", 30
+                ),
+                logger=self.logger,
+            )
+            response = grpc_pb2.InitTrainResponse(
+                model_id=model_id,
+                client_id=self.client_id,
+                round_idx=round_id,
+                metrics=metrics,
+                secure_agg_used=True,
+            )
+        else:
+            pickle_time = time()
+            model_weights = p_dumps(model_weights)
+            self.logger.info(
+                "fedclient.gRPC.train.round.pickle.weights", f"{time()-pickle_time}"
+            )
+            response = grpc_pb2.InitTrainResponse(
+                model_id=model_id,
+                model_weights=model_weights,
+                client_id=self.client_id,
+                round_idx=round_id,
+                metrics=metrics,
+            )
 
         self.logger.info("fedclient.gRPC.train.round.complete", "")
 

@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+// Client -> party and flo_server -> party control plane. See
+// docs/secure_aggregation/proto_contract.md for the full contract and the
+// round_id replay/mix-up-guard rationale.
+service SecureAggPartyService {
+  rpc SubmitShare (SubmitShareRequest) returns (SubmitShareAck) {}
+  rpc RunAggregationRound (RunAggregationRoundRequest) returns (RunAggregationRoundResponse) {}
+  rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse) {}
+}
+
+// Party <-> party. Used ONLY by backends whose inter-party protocol is
+// implemented as gRPC calls between this repo's own party processes (e.g.
+// backend_simulator.py). Backends with their own wire protocol (e.g.
+// backend_hpmpc.py's raw TCP/TLS sockets between spawned binaries, Phase 3)
+// do not use this service at all — it is not part of the
+// SecureAggregationBackend interface contract, just a convenience for
+// backends implemented in pure Python.
+service SecureAggPeerService {
+  rpc GetFinalShare (GetFinalShareRequest) returns (GetFinalShareResponse) {}
+}
+
+message TensorShare {
+  string layer_name = 1;
+  repeated int64 shape = 2;
+  string dtype = 3;
+  bytes share_payload = 4; // pickled, scheme-specific PartyShare.payload
+}
+
+message SubmitShareRequest {
+  string session_id = 1;
+  string round_id = 2; // f"{session_id}:{round_idx}" -- replay/mix-up guard
+  string client_id = 3;
+  string sharing_scheme = 4; // validated against this party's configured scheme
+  repeated TensorShare shares = 5;
+}
+
+message SubmitShareAck {
+  bool accepted = 1;
+  string message = 2;
+}
+
+message RunAggregationRoundRequest {
+  string session_id = 1;
+  string round_id = 2;
+  repeated string client_ids = 3;
+  map<string, double> client_weights = 4; // authoritative, sourced by flo_server
+  int32 timeout_s = 5;
+}
+
+message RunAggregationRoundResponse {
+  bool success = 1;
+  bytes aggregated_model = 2; // pickled OrderedDict[str, Tensor] -- plaintext, post-reveal
+  string error_message = 3;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool ready = 1;
+  string backend_id = 2;
+}
+
+message GetFinalShareRequest {
+  string round_id = 1;
+}
+
+message GetFinalShareResponse {
+  bool ready = 1; // false if this peer hasn't finished its local weighted sum for round_id yet
+  repeated TensorShare shares = 2;
+  string error_message = 3;
+}

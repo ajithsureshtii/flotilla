@@ -13,10 +13,22 @@ comm_config:
     sync_port: 50053
     async_port: 50054
 dataset_config:
-  datasets_dir_path: /home/fedml/flotilla_final/fedml-ng/src/data
+  datasets_dir_path: /src/data
 general_config:
   temp_dir_path: temp
   cleanup_session_on_exit: False
   cleanup_model_cache_on_exit: False
   cleanup_temp_on_exit: False
   use_gpu: True
+
+secure_aggregation:
+  enabled: False
+  sharing_scheme: replicated3pc
+  fixed_point:
+    bitlength: 64
+    frac_bits: 13
+  party_endpoints:
+    - {party_index: 0, host: secure_agg_party0, port: 50100}
+    - {party_index: 1, host: secure_agg_party1, port: 50101}
+    - {party_index: 2, host: secure_agg_party2, port: 50102}
+  submission_timeout_s: 30

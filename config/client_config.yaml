@@ -20,3 +20,17 @@ general_config:
   cleanup_model_cache_on_exit: False
   cleanup_temp_on_exit: False
   use_gpu: <True/False>
+
+# See docs/secure_aggregation/design.md. When enabled==False (default), this
+# client's behavior is byte-for-byte unchanged from today's plaintext path.
+secure_aggregation:
+  enabled: <True/False>
+  sharing_scheme: replicated3pc
+  fixed_point:
+    bitlength: 64
+    frac_bits: 13
+  party_endpoints:
+    - {party_index: 0, host: <party0_host>, port: <party0_bind_port>}
+    - {party_index: 1, host: <party1_host>, port: <party1_bind_port>}
+    - {party_index: 2, host: <party2_host>, port: <party2_bind_port>}
+  submission_timeout_s: 30

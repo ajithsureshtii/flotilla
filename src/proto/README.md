@@ -12,3 +12,8 @@ If python is installed on the system as `python3`, then run:
 bash run3.sh
 ```
 
+`grpc.proto` defines the client/server training RPCs. `secure_agg.proto`
+(added for secure aggregation, see docs/secure_aggregation/proto_contract.md)
+defines the party-server RPCs and is regenerated separately with
+`run_secure_agg.sh` / `run3_secure_agg.sh`, using the same convention.
+
