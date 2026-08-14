@@ -26,7 +26,11 @@ def aggregate(
     if client_active:
         aggregator_state.put(f"{client_id}.client_local_weights", client_local_weights)
 
-    finished_clients = aggregator_state.keys()
+    # list(...): aggregator_state.keys() is a dict_keys view under the
+    # inmemory state backend (not indexable, unlike the list the redis
+    # backend's .keys() returns) -- finished_clients[0] below needs a real
+    # list regardless of which state backend is configured.
+    finished_clients = list(aggregator_state.keys())
     print("FINISHED CLIENTS", finished_clients)
 
     active_clients = [

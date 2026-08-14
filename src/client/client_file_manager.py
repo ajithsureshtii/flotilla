@@ -90,8 +90,13 @@ def setup_model_dir(temp_dir_path: str, model_id: str) -> None:
 def get_dataset_details(path: str) -> dict:
     # dataset_dir_path = os.path.abspath(os.path.join(path, os.pardir))
     print(path)
-    summary_path = path.split(".")[1] + "_summary.data"
-    summary_path = "." + summary_path
+    # os.path.splitext, not path.split(".")[1]: the latter assumed a
+    # "./relative/path.ext" shape (split(".") -> ["", "/relative/path", "ext"],
+    # so [1] recovers the path) and silently produced the wrong filename
+    # (just the extension, e.g. "pth") for an absolute path like
+    # "/src/data/MNIST/x.pth" (split(".") -> ["/src/data/MNIST/x", "pth"]),
+    # which has no "" first element to offset the indexing.
+    summary_path = os.path.splitext(path)[0] + "_summary.data"
     print(summary_path)
     try:
         summary = None
