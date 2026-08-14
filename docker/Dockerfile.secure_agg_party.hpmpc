@@ -1,0 +1,74 @@
+# Wired into docker-compose.yaml's secure_agg_party0/1/2 services by default
+# since Phase 4 ("full rollout: docker-compose finalized with hpmpc-backed
+# party containers", see docs/secure_aggregation/design.md's phase index).
+# For a fast dev loop that skips the C++ build entirely, switch a service's
+# `dockerfile:` back to docker/Dockerfile.secure_agg_party (the
+# simulator-backed, single-stage image from Phase 2) and set
+# `BACKEND_TYPE: simulator` -- see docs/secure_aggregation/runbook.md.
+# Requires the `additional_contexts: {hpmpc_src: ../../hpmpc}` build key
+# (hpmpc lives in a sibling directory to flotilla/, outside this repo's own
+# build context) -- see hpmpc_backend.md.
+#
+# Multi-stage build: compiles the hpmpc party executables (Phase 3, see
+# flotilla/docs/secure_aggregation/hpmpc_backend.md), then copies just the
+# binaries into a Python runtime image.
+#
+# Both stages deliberately use the SAME base distro (ubuntu:24.04) rather
+# than the pytorch/pytorch base image Dockerfile.server/Dockerfile.client
+# use -- copying a compiled C++ binary from one base image into a
+# DIFFERENT base image risks a glibc version mismatch (the runtime image's
+# glibc must be >= what the binary was linked against). Keeping both stages
+# on the same base sidesteps that entirely. torch/numpy are installed via
+# pip in the runtime stage instead of coming from a pytorch/pytorch base.
+#
+# Requires Docker Compose's `additional_contexts` (see docker-compose.yaml)
+# since the hpmpc source lives in a sibling directory, not under this
+# repo's own build context.
+
+FROM ubuntu:22.04 AS hpmpc-build
+
+# ubuntu:22.04 (not 24.04): its default Python is 3.10, which the pinned
+# 2023-era requirements.txt (numpy==1.24.3 etc.) has prebuilt wheels for --
+# on 24.04's default Python 3.12 those packages have no wheel and fall back
+# to a source build that fails outright (an ancient bundled setuptools using
+# `pkgutil.ImpImporter`, removed in 3.12). Keeping BOTH stages on the same
+# base (here, and in the runtime stage below) also avoids any glibc-version
+# mismatch between the compiled hpmpc binaries and the image that runs them.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        gcc-11 g++-11 libeigen3-dev libssl-dev git ca-certificates build-essential make && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 --slave /usr/bin/g++ g++ /usr/bin/g++-11 && \
+    update-alternatives --install /usr/bin/cc cc /usr/bin/gcc 100 && \
+    update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++ 100 && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /hpmpc
+COPY --from=hpmpc_src . /hpmpc
+
+# See scripts/build_fedavg_secure_aggregation.sh for why RANDOM_ALGORITHM=0 /
+# USE_SSL=0 are used here (portable, no x86 AES-NI dependency) and the
+# production-hardening note (real TLS certs, RANDOM_ALGORITHM=2 on x86).
+RUN bash scripts/build_fedavg_secure_aggregation.sh 64 13
+
+
+FROM ubuntu:22.04 AS runtime
+ENV DOCKER_RUNNING=True
+ENV REDIS_IP=10.24.24.32 REDIS_PORT=6379
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 python3-pip python3-dev git build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY src/server/requirements.txt .
+# No --break-system-packages: that flag is for Ubuntu 23.04+/Debian 12+'s
+# PEP 668 "externally-managed-environment" guard, which 22.04's pip
+# predates (and would reject as an unknown option).
+RUN pip3 install -r requirements.txt && \
+    pip3 install torch --index-url https://download.pytorch.org/whl/cpu
+
+COPY --from=hpmpc-build /hpmpc/executables /opt/hpmpc/executables
+
+COPY docker/secure_agg_party_entrypoint.sh .
+COPY src .
+CMD ["bash", "./secure_agg_party_entrypoint.sh"]
