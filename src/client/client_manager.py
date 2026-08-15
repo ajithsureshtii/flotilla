@@ -94,6 +94,12 @@ class ClientManager:
             "cleanup_temp_on_exit"
         ]
 
+        # Debug/validation aid -- see docs/secure_aggregation/rollout_guide.md.
+        # Missing key means disabled, matching today's real-training behavior.
+        self.local_training_disabled: bool = client_config["general_config"].get(
+            "local_training_disabled", False
+        )
+
         # See docs/secure_aggregation/design.md. Missing/absent block means
         # disabled -- today's plaintext path, unchanged.
         self.secure_aggregation_config: dict = client_config.get(
@@ -137,6 +143,7 @@ class ClientManager:
                 dataset_paths=self.dataset_paths,
                 client_info=self.client_info,
                 secure_aggregation_config=self.secure_aggregation_config,
+                local_training_disabled=self.local_training_disabled,
             ),
             sync_server,
         )

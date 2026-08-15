@@ -20,6 +20,11 @@ general_config:
   cleanup_model_cache_on_exit: False
   cleanup_temp_on_exit: False
   use_gpu: <True/False>
+  # Debug/validation aid: when True, StartTraining skips real local training
+  # entirely and returns the incoming model_wts unchanged with zeroed
+  # placeholder metrics -- everything else (secret-sharing, aggregation)
+  # still runs for real. See docs/secure_aggregation/rollout_guide.md.
+  local_training_disabled: <True/False>
 
 # See docs/secure_aggregation/design.md. When enabled==False (default), this
 # client's behavior is byte-for-byte unchanged from today's plaintext path.

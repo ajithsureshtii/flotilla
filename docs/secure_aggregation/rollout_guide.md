@@ -82,6 +82,19 @@ For the `fedavg` comparison run, edit each `flo_client*` service's
 `secure_aggregation.enabled: False`) and submit
 `training_config.fedavg.example.yaml` instead.
 
+## Debugging/validating faster: `local_training_disabled`
+
+`client_config.yaml`'s `general_config.local_training_disabled` (default `False`) skips
+real local training entirely when `True` — no `ClientTrainer`, no dataset load,
+`StartTraining` just returns the incoming checkpoint unchanged with zeroed placeholder
+metrics. Everything below that point (secret-sharing, `SubmitShare`,
+`RunAggregationRound`, reveal, `aggregate()`) still runs for real. This is purely a
+debug/iteration aid for validating the *aggregation* path quickly (new backend, new
+topology, new protocol) without paying real training cost every round — **the global
+model will not change round-over-round and accuracy will look flat while this is on**;
+that's expected, not a bug. Turn it back off (or don't set it) for any run whose numbers
+you actually care about (convergence, real per-round overhead).
+
 ## Recommended rollout order for a new deployment
 
 1. Run the aggregator-level equivalence test (above) — fastest signal, no
@@ -96,8 +109,17 @@ For the `fedavg` comparison run, edit each `flo_client*` service's
    production-shaped session.
 
 Per-round overhead (secure_mpc vs fedavg) should be captured from your own
-run's logs (`flo_server`'s `fedserver.train.round.client.finished` timing
-lines) — this is expected to be dominated by the hpmpc subprocess spawn +
-one reveal round-trip per aggregation, not by training itself; no fixed
-number is asserted here since it depends on model size and deployment
-network latency.
+run's logs via `flo_server`'s `fedserver.train_callback.aggregate_time`
+timing line — this is the metric that actually spans the aggregation step
+(`aggregate_start_time`/`aggregate_end_time` bracket the `self.aggregate(...)`
+call directly), and is expected to be dominated by the hpmpc subprocess
+spawn + one reveal round-trip per aggregation, not by training itself; no
+fixed number is asserted here since it depends on model size and deployment
+network latency. (`fedserver.train.round.client.finished` measures
+something different — client-side model pickling + gRPC send + local
+training + share submission, ending *before* `aggregate()` is even called —
+don't use it for aggregation overhead.) Note `aggregate_time` is only logged
+on rounds where `round_no % server_validation_interval == 0`; set
+`validation_round_interval: 1` (already the value in the example configs) to
+get it every round. See `docs/secure_aggregation/overhead_report.md` for a
+full comparison across secure_mpc protocol variants.

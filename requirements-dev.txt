@@ -3,6 +3,23 @@
 # torch itself is provided by docker/Dockerfile.server's pytorch/pytorch base
 # image; install it separately (e.g. `pip install torch --index-url
 # https://download.pytorch.org/whl/cpu`) if running tests outside that image.
+# tqdm is pinned in src/client/requirements.txt -- needed here too because
+# importing client_grpc_manager.py (e.g. tests/unit/test_client_grpc_manager_
+# local_training_disabled.py) transitively imports client_trainer.py, which
+# imports tqdm even though these tests never run real training.
+#
+# pandas/matplotlib are pinned in src/server/requirements.txt -- needed here
+# too because importing server_session_manager.py (e.g.
+# tests/unit/test_server_session_manager_grpc_train_callback.py) transitively
+# imports utils/plot.py, even though these tests never plot anything. Install
+# numpy==1.24.3 (also pinned in src/server/requirements.txt) AFTER these two,
+# not before -- matplotlib's own dependency resolution otherwise silently
+# pulls in a newer numpy (breaking the numpy-pickle-format compatibility the
+# secure-agg tests rely on; see proto_contract.md's "confirmed hazard" note).
 pytest==8.2.0
 pytest-asyncio==0.23.7
 hypothesis==6.103.0
+tqdm==4.66.1
+pandas==2.0.3
+matplotlib==3.7.2
+numpy==1.24.3

@@ -731,6 +731,14 @@ class FloSessionManager:
             print("CLIENT DIED")
             print(client_id, " TRAIN RESPONSE EMPTY")
             round_no = int(self.training_session.get(f"{self.id}.last_round_number"))
+            # Set here too (not just on the `if response:` branch above) --
+            # a dropped client's check-in can still be the one that
+            # completes a round (aggregated_model truthy below), and
+            # aggregate_end_time's computation needs this defined
+            # regardless of which branch got us there. A real,
+            # pre-existing UnboundLocalError risk found while adding
+            # multi-protocol hpmpc support.
+            aggregate_start_time = time()
             aggregated_model = self.aggregate(
                 session_id=self.id,
                 client_id=client_id,

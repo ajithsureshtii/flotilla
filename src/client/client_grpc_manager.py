@@ -30,6 +30,7 @@ class ClientGRPCManager(grpc_pb2_grpc.EdgeServiceServicer):
         dataset_paths: str,
         client_info: dict,
         secure_aggregation_config: dict = None,
+        local_training_disabled: bool = False,
     ) -> None:
         self.logger = FedLogger(id=client_id, loggername="CLIENT_GRPC_MANAGER")
         self.temp_dir_path = temp_dir_path
@@ -37,6 +38,8 @@ class ClientGRPCManager(grpc_pb2_grpc.EdgeServiceServicer):
         # See docs/secure_aggregation/design.md. Defaults to disabled so a
         # client_config.yaml without this block behaves exactly as before.
         self.secure_aggregation_config = secure_aggregation_config or {"enabled": False}
+        # Debug/validation aid -- see docs/secure_aggregation/rollout_guide.md.
+        self.local_training_disabled = local_training_disabled
 
         self.client = Client(
             client_id=self.client_id,
@@ -181,21 +184,37 @@ class ClientGRPCManager(grpc_pb2_grpc.EdgeServiceServicer):
         if not context.is_active():
             self.logger.error("fedclient.gRPC.train", f"fedserver not active")
             return
-        result, model_weights = self.client.Train(
-            model_id=model_id,
-            model_class=model_class,
-            model_config=model_config,
-            dataset_id=dataset_id,
-            model_wts=model_wts,
-            batch_size=batch_size,
-            learning_rate=learning_rate,
-            num_epochs=num_epochs,
-            loss_function=loss_function,
-            optimizer=optimizer,
-            timeout_duration_s=timeout_duration_s,
-            max_epochs=max_epochs,
-            max_mini_batches=max_mini_batches,
-        )
+        if self.local_training_disabled:
+            # Debug/validation aid -- skip real training (and the dataset
+            # load/ClientTrainer construction it requires) entirely, and
+            # return the incoming checkpoint unchanged so the rest of the
+            # pipeline (secret-sharing, aggregation) still runs for real. See
+            # docs/secure_aggregation/rollout_guide.md.
+            self.logger.info("fedclient.gRPC.train.round.local_training_disabled", "")
+            result = {
+                "time_taken_s": 0.0,
+                "num_epochs": 0,
+                "total_mini_batches": 0,
+                "loss": 0.0,
+                "accuracy": 0.0,
+            }
+            model_weights = model_wts
+        else:
+            result, model_weights = self.client.Train(
+                model_id=model_id,
+                model_class=model_class,
+                model_config=model_config,
+                dataset_id=dataset_id,
+                model_wts=model_wts,
+                batch_size=batch_size,
+                learning_rate=learning_rate,
+                num_epochs=num_epochs,
+                loss_function=loss_function,
+                optimizer=optimizer,
+                timeout_duration_s=timeout_duration_s,
+                max_epochs=max_epochs,
+                max_mini_batches=max_mini_batches,
+            )
 
         metrics = p_dumps(result)
 

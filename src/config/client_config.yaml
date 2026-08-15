@@ -20,6 +20,15 @@ general_config:
   cleanup_model_cache_on_exit: False
   cleanup_temp_on_exit: False
   use_gpu: True
+  # Debug/validation aid: when True, StartTraining skips real local training
+  # entirely (no ClientTrainer, no dataset load) and returns the incoming
+  # model_wts unchanged with zeroed placeholder metrics. Everything below
+  # that point (secret-sharing, SubmitShare, RunAggregationRound, reveal,
+  # aggregate()) still runs for real -- this isolates/speeds up iteration on
+  # the aggregation path without paying real training cost. The global model
+  # will not change round-over-round and accuracy will look flat while this
+  # is on -- expected, not a bug. See docs/secure_aggregation/rollout_guide.md.
+  local_training_disabled: False
 
 secure_aggregation:
   enabled: False
