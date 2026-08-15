@@ -69,6 +69,7 @@ message InitTrainRequest {
   oneof request{
     float timeout_duration_s = 13;
     int32 max_mini_batch_count = 14;
+    int32 max_epochs = 15;
   }
 }
 

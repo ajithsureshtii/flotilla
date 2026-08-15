@@ -25,11 +25,6 @@ def _make_request(model_wts):
         round_idx=0,
         loss_function=pickle.dumps(None),
         optimizer=pickle.dumps(None),
-        # Must be set (truthy): client_grpc_manager.py's StartTraining reads
-        # request.max_epochs/request.max_mini_batches on the un-set path,
-        # neither of which exists on InitTrainRequest (the proto only has
-        # max_mini_batch_count, in a oneof with timeout_duration_s) -- a
-        # real, pre-existing bug unrelated to this test, flagged separately.
         timeout_duration_s=10.0,
     )
 

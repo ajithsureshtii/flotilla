@@ -165,18 +165,25 @@ class ClientGRPCManager(grpc_pb2_grpc.EdgeServiceServicer):
         loss_function = p_loads(request.loss_function)
         optimizer = p_loads(request.optimizer)
 
-        if request.timeout_duration_s:
-            max_mini_batches = None
+        # InitTrainRequest.request is a 3-way oneof (timeout_duration_s,
+        # max_mini_batch_count, max_epochs -- see grpc.proto); WhichOneof
+        # tells us which one the caller actually set, rather than relying on
+        # truthiness checks against every possible field name. This used to
+        # read `request.max_epochs` (a field that didn't exist on the
+        # message at all -- an AttributeError on any request that didn't set
+        # timeout_duration_s) and `request.max_mini_batches` (should have
+        # been max_mini_batch_count) -- a real, pre-existing bug that meant
+        # only the timeout_duration_s path ever worked, since every real
+        # caller (server_session_manager.py) always sets it.
+        max_mini_batches = None
+        max_epochs = None
+        set_field = request.WhichOneof("request")
+        if set_field == "timeout_duration_s":
             timeout_duration_s = request.timeout_duration_s
-            max_epochs = None
-        elif request.max_epochs:
-            max_mini_batches = None
-            timeout_duration_s = None
+        elif set_field == "max_epochs":
             max_epochs = request.max_epochs
-        else:
-            max_mini_batches = request.max_mini_batches
-            timeout_duration_s = None
-            max_epochs = None
+        elif set_field == "max_mini_batch_count":
+            max_mini_batches = request.max_mini_batch_count
 
         self.logger.debug("fedclient.gRPC.train.round.model", model_id)
         print(f"\nfedclient.gRPC.train.round:: Training Round:{round_id}")
