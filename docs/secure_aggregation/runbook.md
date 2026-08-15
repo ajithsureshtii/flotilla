@@ -111,7 +111,7 @@ in the party configs, the compiled executables must be rebuilt to match (or
 `HpmpcBackend._check_config_consistency()` will refuse to start):
 
 ```bash
-cd hpmpc
+cd mpc_engines/hpmpc
 scripts/build_secure_agg.sh <replicated|trio|tetrad> <bitlength> <frac_bits>
 ```
 

@@ -1,0 +1,3 @@
+[submodule "mpc_engines/hpmpc"]
+	path = mpc_engines/hpmpc
+	url = https://github.com/ajithsureshtii/hpmpc.git

@@ -33,7 +33,7 @@ on the same MNIST partition (3 clients, ~19,333 images each), for the same
 
 Two complementary measurements, per the plan this report closes out:
 
-- **Micro-benchmark** (`hpmpc/measurements/run_fedavg_bench.py` +
+- **Micro-benchmark** (`mpc_engines/hpmpc/measurements/run_fedavg_bench.py` +
   `run_plaintext_bench.py`): isolates the MPC protocol's own per-round
   timing/communication from Docker cross-container network jitter, by
   running all of a protocol's party processes on loopback inside ONE
@@ -68,7 +68,7 @@ Two complementary measurements, per the plan this report closes out:
 
 Raw session logs (all 12 runs) are checked in under
 `overhead_report_raw/*.log`; raw micro-benchmark output is
-`hpmpc/measurements/fedavg_bench_results.json` and
+`mpc_engines/hpmpc/measurements/fedavg_bench_results.json` and
 `plaintext_bench_results.json`.
 
 **Environment note:** all runs (both micro-benchmark and end-to-end) were
@@ -223,12 +223,12 @@ communication overhead specifically.
   `trio_run{1,2,3}.log`, `tetrad_run{1,2,3}.log`). Grep for
   `aggregate_time` or `'accuracy'` to find the lines this report's tables
   were computed from.
-- Raw micro-benchmark output: `hpmpc/measurements/fedavg_bench_results.json`
+- Raw micro-benchmark output: `mpc_engines/hpmpc/measurements/fedavg_bench_results.json`
   (per-round wall time + hpmpc-parsed stats for all 3 protocols, 30 rounds
-  each) and `hpmpc/measurements/plaintext_bench_results.json`.
+  each) and `mpc_engines/hpmpc/measurements/plaintext_bench_results.json`.
 - Micro-benchmark tooling (reusable, re-runnable):
-  `hpmpc/measurements/run_fedavg_bench.py`,
-  `hpmpc/measurements/run_plaintext_bench.py`,
-  `hpmpc/measurements/Dockerfile.bench` (builds all 3 protocols + a Python
+  `mpc_engines/hpmpc/measurements/run_fedavg_bench.py`,
+  `mpc_engines/hpmpc/measurements/run_plaintext_bench.py`,
+  `mpc_engines/hpmpc/measurements/Dockerfile.bench` (builds all 3 protocols + a Python
   environment for the benchmark script in one image — see that file's own
   comments for build/run instructions).

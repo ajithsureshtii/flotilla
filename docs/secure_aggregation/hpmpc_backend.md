@@ -23,8 +23,14 @@ detection does not fire for this integration's actual usage pattern.
 
 ## Building
 
+hpmpc is vendored as a git submodule at `mpc_engines/hpmpc` (a fork with
+local patches, tracking `chart21/hpmpc` upstream — see `design.md`'s
+"Vendored MPC libraries" note). Cloning this repo needs
+`git clone --recurse-submodules` (or `git submodule update --init` after a
+plain clone) to actually get its source.
+
 ```bash
-cd hpmpc
+cd mpc_engines/hpmpc
 scripts/build_secure_agg.sh <replicated|trio|tetrad> [bitlength] [frac_bits]   # defaults: 64 13
 ```
 

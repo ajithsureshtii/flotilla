@@ -5,9 +5,11 @@
 # `dockerfile:` back to docker/Dockerfile.secure_agg_party (the
 # simulator-backed, single-stage image from Phase 2) and set
 # `BACKEND_TYPE: simulator` -- see docs/secure_aggregation/runbook.md.
-# Requires the `additional_contexts: {hpmpc_src: ../../hpmpc}` build key
-# (hpmpc lives in a sibling directory to flotilla/, outside this repo's own
-# build context) -- see hpmpc_backend.md.
+# Requires the `additional_contexts: {hpmpc_src: ../mpc_engines/hpmpc}` build
+# key (hpmpc is vendored as a git submodule under mpc_engines/hpmpc -- see
+# design.md's "Vendored MPC libraries" note -- so it's outside this repo's
+# own build context even though it's nested inside the repo tree) -- see
+# hpmpc_backend.md.
 #
 # Multi-stage build: compiles the hpmpc party executables (Phase 3, see
 # flotilla/docs/secure_aggregation/hpmpc_backend.md), then copies just the
@@ -22,8 +24,8 @@
 # pip in the runtime stage instead of coming from a pytorch/pytorch base.
 #
 # Requires Docker Compose's `additional_contexts` (see docker-compose.yaml)
-# since the hpmpc source lives in a sibling directory, not under this
-# repo's own build context.
+# since the hpmpc source is a separate git submodule (mpc_engines/hpmpc),
+# not under this repo's own build context.
 
 FROM ubuntu:22.04 AS hpmpc-build
 

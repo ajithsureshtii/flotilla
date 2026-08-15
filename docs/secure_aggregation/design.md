@@ -89,7 +89,22 @@ work: a `local_training_disabled` client debug flag (see
 `rollout_guide.md`) for fast iteration on the aggregation path without
 paying real training cost, and an `hpmpc_backend.py` `log_stdout` option for
 capturing hpmpc's own per-round timing/communication output (used by the
-secure-aggregation overhead report, `overhead_report.md`, once it exists).
+secure-aggregation overhead report, `overhead_report.md`).
+
+**Vendored MPC libraries.** hpmpc lives at `mpc_engines/hpmpc` as a git
+submodule — vendored, not committed inline, since it's forked upstream code
+(`chart21/hpmpc`) with local patches (this project's `PROTOCOL=8`/Tetrad C++
+branches, a real malicious-abort bug fix, and the benchmark tooling — see
+`hpmpc_backend.md`) that still need to stay mergeable against upstream
+updates. `mpc_engines/` is deliberately a directory, not a single hardcoded
+path, so a structurally different future MPC library (see "This must not
+become an hpmpc-shaped abstraction" above) has an obvious place to land as
+its own submodule alongside hpmpc, without another top-level directory or a
+naming collision. Cloning this repo needs
+`git clone --recurse-submodules` (or `git submodule update --init` after a
+plain clone) to actually get hpmpc's source — Docker builds that reference
+`mpc_engines/hpmpc` will fail with a confusing "not found"-style error
+without it.
 
 ## Problem
 
@@ -110,9 +125,10 @@ Instead of one server seeing plaintext updates, each client secret-shares its
 update across **3 non-colluding party servers**, who jointly compute the
 weighted average via MPC and only ever reveal the final aggregate — never an
 individual client's update — back into the existing training-orchestration
-flow. `hpmpc` (a C++ MPC framework, `../../hpmpc` in this workspace) is the
-**first** backend for this layer, using its Replicated (2,3) secret-sharing
-3PC protocol (`PROTOCOL=2`), semi-honest / honest-majority.
+flow. `hpmpc` (a C++ MPC framework, vendored as a git submodule at
+`mpc_engines/hpmpc` -- see "Vendored MPC libraries" below) is the **first**
+backend for this layer, using its Replicated (2,3) secret-sharing 3PC
+protocol (`PROTOCOL=2`), semi-honest / honest-majority.
 
 **This must not become an hpmpc-shaped abstraction.** hpmpc's integration
 shape — compile-time-everything, one static executable per party, process-

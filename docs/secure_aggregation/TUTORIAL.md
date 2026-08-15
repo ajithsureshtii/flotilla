@@ -980,9 +980,9 @@ true` enforces that at the Docker network level, not just by convention).
 By default (Phase 4), the 3 services build
 `docker/ Dockerfile.secure_agg_party.hpmpc` — a multi-stage build that
 compiles the real hpmpc executables in one stage (`additional_contexts:
-{hpmpc_src: ../../hpmpc}`, since hpmpc lives in a sibling directory outside
-this repo's own build context) and copies just the binaries into a slim
-runtime stage. For a fast dev loop with no C++ toolchain required at all,
+{hpmpc_src: ../mpc_engines/hpmpc}`, since hpmpc is vendored as a git
+submodule, outside this repo's own build context) and copies just the
+binaries into a slim runtime stage. For a fast dev loop with no C++ toolchain required at all,
 switch a service's `dockerfile:` back to `docker/Dockerfile.secure_agg_party`
 (the single-stage, simulator-backed image from Phase 2) and set
 `BACKEND_TYPE: simulator`.
@@ -1219,8 +1219,8 @@ missing.
 
 `docker/ Dockerfile.secure_agg_party.hpmpc` is a multi-stage build:
 `hpmpc-build` compiles the party executables from the hpmpc source (mounted
-via Compose's `additional_contexts`, since hpmpc lives in a sibling
-directory outside this repo's build context); `runtime` installs the Python
+via Compose's `additional_contexts`, since hpmpc is a git submodule at
+`mpc_engines/hpmpc`, outside this repo's own build context); `runtime` installs the Python
 dependencies and copies in just the compiled binaries. **Both stages
 deliberately use the same base distro** (`ubuntu:22.04`) — copying a
 compiled C++ binary into a *different* base image risks a glibc version

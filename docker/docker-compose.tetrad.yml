@@ -62,7 +62,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.secure_agg_party.hpmpc
       additional_contexts:
-        hpmpc_src: ../../hpmpc
+        hpmpc_src: ../mpc_engines/hpmpc
       args:
         HPMPC_PROTOCOL_NAME: tetrad
     container_name: secure_agg_party3

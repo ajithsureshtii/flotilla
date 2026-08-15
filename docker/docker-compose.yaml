@@ -27,8 +27,9 @@ services:
   # Phase 4: built from the hpmpc-enabled multi-stage Dockerfile (compiles
   # the real hpmpc party executables -- see
   # docs/secure_aggregation/hpmpc_backend.md). Needs `additional_contexts`
-  # since hpmpc lives in a sibling directory to this repo. Set
-  # BACKEND_TYPE=simulator instead (and switch the dockerfile back to
+  # since hpmpc is vendored as a git submodule under mpc_engines/hpmpc (see
+  # design.md's "Vendored MPC libraries" note), not a plain subdirectory of
+  # this repo. Set BACKEND_TYPE=simulator instead (and switch the dockerfile back to
   # docker/Dockerfile.secure_agg_party) for a fast, no-C++-build dev loop --
   # see docs/secure_aggregation/topology.md.
   secure_agg_party0:
@@ -36,7 +37,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.secure_agg_party.hpmpc
       additional_contexts:
-        hpmpc_src: ../../hpmpc
+        hpmpc_src: ../mpc_engines/hpmpc
     container_name: secure_agg_party0
     environment:
       PARTY_INDEX: 0
@@ -57,7 +58,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.secure_agg_party.hpmpc
       additional_contexts:
-        hpmpc_src: ../../hpmpc
+        hpmpc_src: ../mpc_engines/hpmpc
     container_name: secure_agg_party1
     environment:
       PARTY_INDEX: 1
@@ -78,7 +79,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.secure_agg_party.hpmpc
       additional_contexts:
-        hpmpc_src: ../../hpmpc
+        hpmpc_src: ../mpc_engines/hpmpc
     container_name: secure_agg_party2
     environment:
       PARTY_INDEX: 2
