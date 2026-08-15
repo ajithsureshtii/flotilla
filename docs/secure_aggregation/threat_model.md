@@ -9,6 +9,11 @@ risk below was confirmed with an actual fault-injection test
 
 ## Data flow (concrete as of Phase 2, dataset-size sharing added post-rollout — see `topology.md`, `proto_contract.md`)
 
+Diagram below shows the 3-party topology (Replicated/Trio); Tetrad
+(PROTOCOL=8) uses the same flow with a 4th `flo_secure_agg_party3` and
+`SubmitShare`/`RunAggregationRound` fanning out to all 4 — see
+`hpmpc_backend.md`'s Tetrad section.
+
 ```
 flo_client            trains locally (unchanged) -> plaintext state_dict
                        |
@@ -42,22 +47,37 @@ per-client weight to the parties.
 
 ## Adversary model
 
-- **3 parties**, semi-honest, honest-majority: at most 1 of the 3 party
-  servers may be passively curious (tries to learn secrets from what it
-  sees/computes) but follows the protocol correctly. No collusion between 2
-  or more parties is assumed away — with 2 colluding parties, replicated
-  (2,3) secret sharing is broken by construction (2 shares reconstruct the
-  secret), so operationally the 3 parties must be run by genuinely
-  independent, non-colluding operators for this guarantee to mean anything.
-- **No protection against a maliciously/actively deviating party.** A party
-  that sends incorrect protocol messages on purpose is out of scope for the
-  initial implementation (hpmpc's Tetrad/4PC protocol is the documented
-  upgrade path if this is later required — see `design.md`'s Phase 5).
-- **Clients are trusted to correctly secret-share their own update.** A
-  malicious client could submit garbage shares (garbage in, garbage out) —
-  this is a data-quality/poisoning concern Flotilla already has in the
-  plaintext world (a client can already submit a garbage plaintext update
-  today) and is not a new attack surface introduced by this work.
+- **Replicated (PROTOCOL=2) and Trio (PROTOCOL=5): 3 parties, semi-honest,
+  honest-majority.** At most 1 of the 3 party servers may be passively
+  curious (tries to learn secrets from what it sees/computes) but follows
+  the protocol correctly. No collusion between 2 or more parties is assumed
+  away — with 2 colluding parties, replicated (2,3) secret sharing is broken
+  by construction (2 shares reconstruct the secret), so operationally the 3
+  parties must be run by genuinely independent, non-colluding operators for
+  this guarantee to mean anything.
+- **No protection against a maliciously/actively deviating party for
+  Replicated or Trio.** A party that sends incorrect protocol messages on
+  purpose is out of scope for these two protocols.
+- **Tetrad (PROTOCOL=8): 4 parties, labeled malicious-secure upstream by
+  hpmpc, but treat as semi-honest-only in THIS integration — see
+  `hpmpc_backend.md`'s "Malicious-security caveat, found empirically".**
+  hpmpc's own compare-views cheat-detection mechanism is real, compiled
+  code (not a stub), and its adversary model, if it worked as intended,
+  would be inferred-not-explicit 1-of-4 active corruption (standard for
+  this class of protocol; not an in-repo hpmpc statement). **However**, two
+  independent real corruption experiments against a live 4-party Tetrad
+  deployment during development found this detection mechanism did **not**
+  fire — see the residual risk below. Until this is root-caused and fixed
+  (or independently reverified), operationally treat a Tetrad deployment as
+  providing the SAME guarantee as Trio/Replicated (semi-honest,
+  honest-majority) — not a stronger one — regardless of which protocol
+  number is configured.
+- **Clients are trusted to correctly secret-share their own update, for all
+  three protocols.** A malicious client could submit garbage shares
+  (garbage in, garbage out) — this is a data-quality/poisoning concern
+  Flotilla already has in the plaintext world (a client can already submit
+  a garbage plaintext update today) and is not a new attack surface
+  introduced by this work.
 
 ## What is protected
 
@@ -131,8 +151,36 @@ per-client weight to the parties.
   `round_id` field on `SubmitShare`/`RunAggregationRound` (Phase 2) guards
   against accidental cross-round mix-ups; it is not designed to resist an
   adversarial party replaying old shares.
-- **`verify_party_agreement`** (a config option that cross-checks ≥2/3
-  parties revealed an identical plaintext aggregate) is a correctness/
-  liveness sanity check for catching bugs during development, not a
-  malicious-security guarantee — a colluding or buggy majority can still
-  agree on a wrong answer.
+- **`verify_party_agreement`** (a config option that cross-checks every
+  configured party revealed an identical plaintext aggregate) is a
+  correctness/liveness sanity check for catching bugs during development,
+  not a malicious-security guarantee — a colluding or buggy majority can
+  still agree on a wrong answer, and a genuinely malicious party could
+  simply lie in its own gRPC response instead of returning an honest
+  (and disagreeing) value.
+- **Tetrad's malicious-abort detection did not fire against real
+  corruption, in testing.** During Tetrad's real 4-container verification
+  (see `hpmpc_backend.md`'s "How this was verified"), two independent
+  experiments deliberately corrupted a value in one party's share that,
+  traced from `Tetrad-P_0_template.hpp`'s `complete_Reveal()`, is supposed
+  to be cross-checked against another party's redundant copy via hpmpc's
+  own `store_compare_view()`/`compare_views()` mechanism
+  (`live_protocol_base.hpp`). Neither corruption produced hpmpc's
+  `"Compareviews failed!"` output or a nonzero process exit — every party
+  reported success, and only `verify_party_agreement` (see above, NOT a
+  security guarantee) caught the resulting disagreement, and only because
+  the corruption happened to be large enough to exceed its floating-point
+  comparison tolerance. The leading (unconfirmed) hypothesis is that
+  Tetrad's `PROTOCOL_INIT` buffer-sizing class is reused from a different
+  protocol family (`PROTOCOL=7`'s `OEC_MAL`, not a Tetrad-specific init
+  class — see `protocols/Protocols.h`), possibly miscounting the
+  `compare_views` buffer sizes for Tetrad's actual reveal-path calls and
+  silently disabling the cross-check. **Not independently root-caused** —
+  this is a genuine, unresolved, empirically-observed gap, not a
+  theoretical one, and supersedes the more abstract "does the BS26 attack
+  against compare-views also apply to Tetrad" question this entry
+  originally flagged: regardless of BS26's applicability, the mechanism was
+  observed not to fire at all for this integration's usage pattern.
+  Operationally: do not rely on Tetrad's malicious-security guarantee for
+  this integration until this is resolved — see the adversary-model note
+  above.

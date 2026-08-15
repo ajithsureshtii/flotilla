@@ -1,26 +1,42 @@
 # hpmpc backend
 
-**Status: Phase 4 complete.** `backend_hpmpc.py` is implemented and verified
-end-to-end against real compiled hpmpc binaries (multi-client, multi-layer,
-negative and fixed-point values) — see "How this was verified" below. Since
-Phase 4, it is also wired into `docker-compose.yaml`'s default topology (the
+**Status: Phase 4 complete; multi-protocol support in progress.**
+`backend_hpmpc.py` is implemented and verified end-to-end against real
+compiled hpmpc binaries (multi-client, multi-layer, negative and
+fixed-point values) — see "How this was verified" below. Since Phase 4, it
+is also wired into `docker-compose.yaml`'s default topology (the
 `secure_agg_party0/1/2` services build `docker/Dockerfile.secure_agg_party.hpmpc`
 by default) and was exercised in a real end-to-end MNIST + LeNet5 training
-run across 3 genuine containers — see
-[`rollout_guide.md`](rollout_guide.md).
+run across 3 genuine containers — see [`rollout_guide.md`](rollout_guide.md).
+
+One `HpmpcBackend` class now supports multiple hpmpc protocols, selected via
+a required `protocol` config value (not a different backend module — see
+"Supporting multiple protocols" below): **PROTOCOL=2 ("Replicated 3PC")**,
+**PROTOCOL=5 ("Trio")**, and **PROTOCOL=8 ("Tetrad")**, all three covered in
+full in this document and all three verified against real compiled binaries
+running in real Docker containers (Trio via `docker-compose.trio.yml`,
+Tetrad via `docker-compose.tetrad.yml` — see "How this was verified"). **Read
+the Tetrad section's "Malicious-security caveat, found empirically" before
+relying on Tetrad for anything beyond semi-honest security** — real
+corruption testing during development found hpmpc's own malicious-abort
+detection does not fire for this integration's actual usage pattern.
 
 ## Building
 
 ```bash
 cd hpmpc
-scripts/build_fedavg_secure_aggregation.sh [bitlength] [frac_bits]   # defaults: 64 13
+scripts/build_secure_agg.sh <replicated|trio|tetrad> [bitlength] [frac_bits]   # defaults: 64 13
 ```
 
-This builds `executables/run-P0.o`, `run-P1.o`, `run-P2.o` (PROTOCOL=2,
-Replicated 3PC, `FUNCTION_IDENTIFIER=90`) and writes
-`executables/fedavg_secure_aggregation.build_metadata.json`, which
-`backend_hpmpc.py`'s config-consistency check reads at party startup (see
-below).
+Builds into `executables/<name>/` (e.g. `executables/replicated/run-P0.o`,
+`run-P1.o`, `run-P2.o` for `PROTOCOL=2`, `FUNCTION_IDENTIFIER=90`) — **not**
+directly into `executables/`, since the compiled output filenames
+(`run-P{i}.o`) are not protocol-namespaced and building a second protocol
+into the same directory would silently overwrite the first one's binaries.
+Also writes `executables/<name>/fedavg_secure_aggregation.build_metadata.json`,
+which `backend_hpmpc.py`'s config-consistency check reads at party startup
+(see below) — this now also records which protocol number the executables
+were built for, checked against the party's own configured `protocol`.
 
 **You need a working C++20 toolchain.** If you hit `'algorithm' file not
 found` (or similar missing-standard-library-header errors) on macOS, that's
@@ -185,41 +201,325 @@ party index ascending**. `HpmpcBackend.start()` sorts `peer_endpoints` by
 
 ## Config-consistency check
 
-`bitlength`/`frac_bits` live in two independent places — a party's YAML
-config (Python-side `FixedPointCodec`) and hpmpc's compile-time
-`BITLENGTH`/`FRACTIONAL` macros — with no automatic way to keep them in
-sync. `build_fedavg_secure_aggregation.sh` writes
-`executables/fedavg_secure_aggregation.build_metadata.json` recording what
-the binaries were actually compiled with;
+`protocol`/`bitlength`/`frac_bits` live in two independent places — a
+party's YAML config (`backend.hpmpc.protocol`, Python-side
+`FixedPointCodec`) and hpmpc's compile-time `PROTOCOL`/`BITLENGTH`/`FRACTIONAL`
+macros — with no automatic way to keep them in sync.
+`build_secure_agg.sh` writes `executables/<name>/fedavg_secure_aggregation.build_metadata.json`
+recording what the binaries were actually compiled with;
 `HpmpcBackend._check_config_consistency()` (called from `start()`, so a
 mismatch fails a party at startup, not mid-round) compares it against the
-party's configured codec and raises `RuntimeError` on any mismatch, or if
-the metadata file or an expected executable is simply missing.
+party's configured `protocol` and codec, checking `protocol` first (a wrong
+protocol makes the fixed-point comparison moot anyway), and raises
+`RuntimeError` on any mismatch, or if the metadata file or an expected
+executable is simply missing.
+
+## Supporting multiple protocols
+
+`HpmpcBackend` takes a required `protocol` constructor arg (no default —
+every party config must say what it means) rather than being one
+protocol-2-only class or three separate backend modules. Protocol number is
+a config value here, not a different backend type, because every hpmpc
+protocol shares the same integration shape (subprocess-per-round, file-IO
+via `SECURE_AGG_INPUT_FILE`/`SECURE_AGG_OUTPUT_FILE`, the same peer-IP
+DNS-resolution hazard, the same `build_metadata.json` machinery) — only the
+share-conversion math and the on-disk field count/layout are genuinely
+protocol-specific. Those live behind a small internal
+`_SharePackingStrategy` per `(protocol, party_index)`, selected once at
+construction; `run_aggregation_round()`'s per-layer sum loop iterates over
+however many fields the active strategy needs (2 for Replicated, more for
+role-asymmetric protocols) instead of a hardcoded `(x, a)` pair. Each
+protocol's own share-packing strategy and its C++ function extension are
+documented in that protocol's own section below, once it's landed.
+
+`num_parties` is validated per-protocol too (a per-protocol expected-count
+table, not a hardcoded `3`), so a party genuinely gets constructed with the
+right party count for whichever protocol it's configured for.
+
+## Trio backend (PROTOCOL=5)
+
+Trio is hpmpc's own real, semi-honest, 3-party secret-sharing protocol
+(`protocols/Protocols.h`'s `trio=5` — not to be confused with `ttp3=6`,
+"Trusted Third Party," which is an idealized dealer-model baseline with no
+privacy guarantee and was explicitly *not* built as a secure_mpc backend).
+Same 3-party topology as Replicated, so no Docker/topology changes are
+needed — only a different compiled binary and a different share-conversion
+strategy (`docker-compose.trio.yml`, an override on the base
+`docker-compose.yaml`, selects it).
+
+### hpmpc's native Trio `OECL{0,1,2}_Share(p1, p2)` layout
+
+Unlike Replicated's single symmetric share class, Trio uses **three
+distinct classes**, one per real party role (`protocols/3-PC/ours/
+oecl-P_{0,1,2}_template.hpp`), each holding a `(p1, p2)` pair with
+role-*different* semantics. Reading `prepare_reveal_to_all()`/
+`complete_Reveal()` in all three files:
+
+```cpp
+// OECL0_Share (P0)
+void prepare_reveal_to_all() const { send_to_live(P_1, p1); send_to_live(P_2, p2); }
+Datatype complete_Reveal(...) const { return SUB(receive_from_live(P_2), p2); }
+
+// OECL1_Share (P1)
+void prepare_reveal_to_all() const {}   // no-op -- P1 sends nothing during reveal
+Datatype complete_Reveal(...) const { return SUB(p1, receive_from_live(P_0)); }
+
+// OECL2_Share (P2)
+void prepare_reveal_to_all() const { send_to_live(P_0, p1); }
+Datatype complete_Reveal(...) const { return SUB(p1, receive_from_live(P_0)); }
+```
+
+Tracing sends through receives gives the reveal invariants every party's
+`(p1, p2)` pair must satisfy: **`secret = P2.p1 - P0.p2`** and
+**`secret = P1.p1 - P0.p1`**. `P1.p2`/`P2.p2` are never read by reveal at
+all (dead weight for this purpose — they only matter for `prepare_mult`,
+which Flotilla never calls).
+
+### Per-party-local conversion from `replicated3pc.py`'s `(c_j, c_{j+1})`
+
+Deriving a per-party-local formula (each party using only its own
+`(c_j, c_j1)` pair, no knowledge of the secret, exactly like Replicated's
+`_to_hpmpc_xa`) and substituting into the two invariants above:
+
+```
+party 0: p1 = -c_j,        p2 = -c_{j+1}
+party 1: p1 = c_j + c_{j+1},  p2 unused by reveal (0)
+party 2: p1 = c_j + c_{j+1},  p2 unused by reveal (0)
+```
+
+(`_to_hpmpc_trio` in `backend_hpmpc.py`.) This is algebraically equivalent
+to the more intuitive "given a known secret S, party 0 picks free blinding
+`x0, a0`; party 1 gets `S+x0`; party 2 gets `S+a0`" framing — setting
+`x0=-c_j, a0=-c_{j+1}` for party 0's own pair reproduces exactly the same
+`c_1+c_2` / `c_0+c_2`-shaped values for parties 1/2 as the direct derivation
+above, confirming the two are the same thing viewed two ways.
+
+**Numerically verified in pure Python** (both the single-secret reveal
+invariant and cross-client elementwise-summed reveal — see
+`tests/unit/test_backend_hpmpc.py`'s `test_to_hpmpc_trio_round_trips_through_replicated3pc_reconstruct`
+and `test_to_hpmpc_trio_cross_client_summing_is_homomorphic`), **and
+subsequently verified against real compiled Trio binaries** — see "How this
+was verified" below.
+
+### A real compile-time pitfall this surfaced: per-party class visibility
+
+Unlike `Replicated_Share<DATATYPE>` (one symmetric class, declared
+identically no matter which `PARTY` compiled it), Trio's `OECL0_Share`,
+`OECL1_Share`, `OECL2_Share` are three genuinely separate classes, and
+`Protocols.h` only declares the ONE matching the `PARTY` a given binary is
+compiled as — a `PARTY=1` Trio build never sees `OECL0_Share` or
+`OECL2_Share` declared at all. The first real build attempt confirmed this
+the hard way: a single `if constexpr` naming all three classes together
+failed to even **parse** (`'OECL1_Share' was not declared in this scope`),
+because `if constexpr` only discards a branch's *statements* for the
+untaken case — it does not suppress a name-lookup failure in the branch's
+own *condition expression*, and referencing an undeclared type name in a
+condition is a hard error regardless of which branch would actually run.
+The fix: wrap each protocol's (and, for role-asymmetric protocols, each
+party's) branch in a `#if PROTOCOL == ...` / `#if PARTY == ...`
+preprocessor guard, so the compiler never attempts to look up a role's
+class name in a translation unit that doesn't declare it — see
+`fedavg_secure_aggregation.hpp`'s module docstring, and remember this for
+Tetrad (4 more per-party-only-declared classes) too.
+
+### No `operator+` pitfall for Trio (unlike Replicated)
+
+`Additive_Share::operator+` (`datatypes/Additive_Share.hpp`) only special-
+cases `PROTOCOL==2`; for any other protocol it calls `Share_Type::Add(b,
+OP_ADD)`, plain elementwise addition. Each `OECL{0,1,2}_Share::Add()` does
+exactly that on both `p1` and `p2`. Substituting into the two reveal
+invariants confirms summing two independently-shared secrets' `(p1, p2)`
+pairs elementwise correctly yields a valid Trio share of their sum — **no
+analog of Replicated's "keep left `x`, subtract right's `a`" trap exists
+here**. `backend_hpmpc.py` still pre-sums in Python before invoking the
+binary, for consistency with the one convention used across every protocol
+(and because none of these share types expose public getters a C++ program
+could sum through anyway), not because it's forced to.
+
+### File contract addendum
+
+```
+PROTOCOL=5 (Trio) input: uint32 elements_per_client, then that many
+                         (uint64 p1, uint64 p2) pairs per party role --
+                         same on-disk shape as Replicated's (x, a), just
+                         different per-role semantics/values. Party 1/2's
+                         p2 is always written as 0 (unused by reveal).
+output:                  unchanged -- uint32 elements_per_client, then
+                         that many uint64s.
+```
+
+## Tetrad backend (PROTOCOL=8)
+
+Tetrad is hpmpc's 4-party protocol, labeled malicious-secure upstream
+(`protocols/Protocols.h`'s `Tetrad=8`; `config.h` auto-sets `MAL=1` for any
+`PROTOCOL > 7`). Unlike Trio, its 4-party masking structure genuinely cannot
+be derived from a 3-party `replicated3pc.py` share — see the next
+subsection — so it needed a new client-side sharing scheme, not just a new
+per-party-local conversion function. **Read "Malicious-security caveat,
+found empirically" below before trusting Tetrad for anything beyond
+semi-honest security in this integration.**
+
+### Why Tetrad needed a new sharing scheme, not just a new conversion
+
+`Replicated3PCScheme`/`_to_hpmpc_trio` both take an existing 3-party
+`(c_j, c_{j+1})` replicated share and convert it, per-party-locally, into
+whatever that protocol's native class needs. Tetrad's masking relation is
+`mv = x + λ1 + λ2 + λ3` (mod `2**bitlength`), needing **3 independent random
+values**, not 2 — there is no way to re-derive a 4th party's share from a
+3-component replicated share. `sharing_schemes/tetrad4pc.py`'s
+`Tetrad4PCScheme` produces already-native-shaped payloads directly at the
+client instead:
+
+```
+party 0: (mv, λ1, λ2)
+party 1: (mv, λ1, λ3)
+party 2: (mv, λ2, λ3)
+party 3: (λ1, λ2, λ3)   -- no mv; party 3 never sees the masked value
+```
+
+`_SharePackingStrategy.convert()`'s signature was generalized from
+`(c_j, c_j1, mask)` to `(payload, mask)` to accommodate this — Tetrad's
+strategy (`_TetradStrategy`/`_to_hpmpc_tetrad` in `backend_hpmpc.py`) is a
+near-passthrough (flatten + ring-mask each of the 3 fields), since
+`tetrad4pc.py` already produces values shaped for hpmpc's native
+`Tetrad{0,1,2,3}_Share` constructors.
+
+### hpmpc's native `Tetrad{0,1,2,3}_Share` layout
+
+Four distinct classes (`protocols/4-PC/tetrad/Tetrad-P_{0,1,2,3}_template.hpp`),
+matching `Tetrad4PCScheme`'s payload shape field-for-field:
+`Tetrad0/1/2_Share(mv, l0, l1)` and `Tetrad3_Share(l1, l2, l3)` (constructor
+argument order already matches this file's on-disk `(f0, f1, f2)` layout
+directly — no reordering needed, unlike Trio's role-dependent construction).
+`complete_Reveal()` (traced from all 4 files) confirms the masking relation
+above: each of P0/P1/P2 computes `mv - (missing λ received from P3) - (its
+own two λ fields)`; P3 sends `λ1→P0's peer slot`, `λ2→P1's`, `λ3→P2's` (via
+`prepare_reveal_to_all`'s three `send_to_live` calls) and never computes a
+reveal value of its own. Same per-party class-visibility pitfall as Trio
+(see that section) — one `TETRAD_LIVE_SHARE` macro per `PARTY`, guarded by
+`#if PROTOCOL == 8` / `#if PARTY == 0/1/2/3` in
+`fedavg_secure_aggregation.hpp`, following the exact pattern established for
+Trio. Compiled successfully in a real Docker build on the first attempt
+(the pitfall was already known from Trio) — see "How this was verified".
+
+**Numerically verified in pure Python** (`tests/unit/test_tetrad4pc.py`,
+`tests/unit/test_backend_hpmpc.py`'s
+`test_to_hpmpc_tetrad_round_trips_through_tetrad4pc_reconstruct` and
+`test_to_hpmpc_tetrad_cross_client_summing_is_homomorphic`), **and
+subsequently verified against real compiled Tetrad binaries in a real
+4-container deployment** — see "How this was verified" below.
+
+### `operator+`: no pitfall, same as Trio
+
+Each `Tetrad{0,1,2,3}_Share::Add()` does plain elementwise addition on every
+field — no analog of Replicated's `PROTOCOL==2`-only "keep left `x`,
+subtract right's `a`" trap. `backend_hpmpc.py` still pre-sums in Python
+before invoking the binary, for the same one-convention reason as Trio.
+
+### File contract addendum
+
+```
+PROTOCOL=8 (Tetrad) input: uint32 elements_per_client, then that many
+                           (uint64 f0, uint64 f1, uint64 f2) triples per
+                           role -- semantics differ by role (mv, l0, l1 for
+                           P0/1/2; lambda1, lambda2, lambda3 for P3) but the
+                           field count/order is uniform, so the file writer
+                           needs no per-role branching.
+output:                    unchanged -- uint32 elements_per_client, then
+                           that many uint64s.
+```
+
+### New env overrides needed: `NUM_PARTIES`, `SHARING_SCHEME`
+
+Trio kept the checked-in config file's defaults unchanged (`num_parties: 3`,
+`sharing_scheme: replicated3pc`), so no new env-var plumbing was needed for
+it. Tetrad genuinely needs `num_parties: 4` and `sharing_scheme: tetrad4pc`
+on every party — a real gap the Trio work hadn't surfaced. Fixed by adding
+`NUM_PARTIES`/`SHARING_SCHEME` env overrides to
+`flo_secure_agg_party.py`'s `_apply_env_overrides()`, following the exact
+pattern of the existing overrides, and wiring them into the new 4th
+`secure_agg_party3` service in `docker-compose.tetrad.yml` (which also
+updates `PEERS_JSON` on parties 0-2 to include party 3).
+
+### Malicious-security caveat, found empirically
+
+**Important, and easy to miss:** hpmpc labels Tetrad malicious-secure
+upstream, and its cheat-detection mechanism (`compare_views()` in
+`protocols/live_protocol_base.hpp`, batched SHA-256 comparison of redundant
+per-party values, run immediately after every `FUNCTION` call whenever
+`MAL==1`) is real, compiled code — not a stub. `live_protocol_base.hpp`'s
+own failure branch had a genuine pre-existing bug (a dead, commented-out
+`exit(0)` that would have reported *success* even on a detected cheat),
+which was patched to `exit(1)` (see the comment at that call site) so that
+`HpmpcBackend`'s existing "any nonzero exit code is a failed round" check
+(`backend_hpmpc.py`'s `run_aggregation_round`) would correctly surface a
+detected cheat as a `RuntimeError`.
+
+**However**, testing this for real (not just mocking a nonzero exit code)
+against the real 4-container Tetrad deployment turned up something
+important: **two independent real share-corruption experiments were not
+caught by hpmpc's own `compare_views` mechanism at all** — corrupting a
+value redundantly held by two parties and cross-checked via
+`store_compare_view()` in the reveal path (traced directly from
+`Tetrad-P_0_template.hpp`'s `complete_Reveal()`) produced no
+`"Compareviews failed!"` output, no nonzero exit code, and no error from any
+party — every party reported `success=True`, and the *only* thing that
+caught the corruption was `party_orchestrator_client.py`'s own
+`verify_party_agreement` cross-check (comparing the 4 parties' revealed
+values against each other), which its own docstring already states
+explicitly is a **correctness/liveness sanity check, not a security
+guarantee** — a genuinely malicious party controlling its own gRPC response
+could simply lie about its result instead of returning an honestly-computed
+(and disagreeing) value, defeating this check entirely.
+
+The leading hypothesis, traced from `protocols/Protocols.h`: Tetrad's
+`PROTOCOL_INIT` (the init-phase stub class used only to size the
+`compare_views` buffers — see `elements_to_compare` in
+`core/networking/buffers.h` / `protocols/init_protocol_base.hpp`) is
+**reused from `PROTOCOL=7`'s (`ttp4`/`OEC_MAL`) init classes**, not a
+Tetrad-specific init class. If that class's own reveal-path call pattern to
+`store_compare_view` doesn't structurally match `Tetrad{0,1,2,3}_Share`'s
+actual calls, the buffer-size bookkeeping for Tetrad's own reveal could be
+computed incorrectly (in the extreme, zero-sized for slots Tetrad's real
+class does use), which would silently skip the entire cross-check for this
+operation regardless of what's corrupted. **This hypothesis was not
+independently confirmed** (would require further hpmpc-internals debugging,
+judged out of scope for this integration work) — it is the most plausible
+explanation found by reading the relevant source, not a proven root cause.
+
+**Practical takeaway**: treat this backend, as actually deployed for
+Flotilla's bare "sum shares, then reveal" `FedAvgSecureAggregation` (which
+never performs a Tetrad multiplication — the operation hpmpc's own
+malicious-security machinery is generally exercised and hardened against),
+as providing the **same semi-honest security as Trio/Replicated in
+practice**, not hpmpc's usual textbook malicious-security guarantee, until
+this is resolved. See `threat_model.md`'s adversary-model section for the
+full framing and the residual-risk entry this replaces.
 
 ## Known limitations (tracked, not solved here)
 
-- **No fault tolerance.** Losing 1 of 3 party processes mid-round hangs or
-  fails that round — the live MPC computation genuinely needs all 3 parties
-  participating (unlike offline reconstruction, which only needs 2 of 3
-  shares); see `threat_model.md`.
+- **No fault tolerance.** Losing 1 party process mid-round hangs or fails
+  that round — the live MPC computation genuinely needs every configured
+  party participating (unlike offline reconstruction, which only needs a
+  threshold of shares); see `threat_model.md`.
 - **Process-per-round overhead.** Each round spawns a fresh executable
   (hpmpc's own execution model — see `protocol_executer.hpp`); for very
   frequent small rounds this has more overhead than a persistent daemon
   would. Not measured/optimized in this phase.
 - **Dev-friendly crypto choices** (`RANDOM_ALGORITHM=0`, `USE_SSL=0` — see
   above) are not what a production deployment should ship with.
-- **Only `PROTOCOL=2` (Replicated 3PC) is wired up.** Swapping to
-  `PROTOCOL=5` ("Trio", hpmpc's own higher-performance 3PC variant) or a
-  4-party malicious-secure protocol (Tetrad) is a documented future upgrade
-  path (see `design.md`'s Phase 5) — the share-format work here is specific
-  to Replicated's `(x, a)` layout and would need to be redone for a
-  different protocol's share representation.
+- **Tetrad's malicious-security guarantee was not confirmed to hold for this
+  integration** — see "Malicious-security caveat, found empirically" above.
+  Treat it as semi-honest-only until resolved.
 
 ## How this was verified
 
 No real hpmpc build could run on the development host directly (see
-"Building" above), so verification happened inside an ad hoc
-`ubuntu:24.04` + `gcc-12` Docker container, in increasing order of realism:
+"Building" above), so verification happened inside Docker, in increasing
+order of realism.
+
+**Replicated (PROTOCOL=2)**, inside an ad hoc `ubuntu:24.04` + `gcc-12`
+container:
 
 1. A single-client, single-element share, converted via the `(x, a)`
    formula above and revealed through the 3 real compiled binaries — this
@@ -239,8 +539,69 @@ No real hpmpc build could run on the development host directly (see
    and a 3-vector), run through real subprocesses via `asyncio` — matched
    the expected weighted raw sum exactly.
 
+**Trio (PROTOCOL=5)**, built and run via the real `docker-compose.trio.yml`
+override (`docker compose -f docker-compose.yaml -f docker-compose.trio.yml
+build/up secure_agg_party0 secure_agg_party1 secure_agg_party2`) — a
+genuinely different, more realistic verification path than Replicated's ad
+hoc container, since this exercised the actual deployment images:
+
+1. First build attempt failed to compile at all — this is what surfaced
+   the per-party class-visibility pitfall documented above
+   (`if constexpr` alone isn't enough; needs `#if PROTOCOL`/`#if PARTY`
+   guards). Fixed, rebuilt successfully.
+2. All 3 containers started and reported `HealthCheck` `ready=True,
+   backend_id="hpmpc"` — confirms `_check_config_consistency()` passed for
+   real (a `protocol` mismatch would have crashed `start()`).
+3. A real 3-client round (`client_secure_agg_manager.share_and_submit` +
+   `party_orchestrator_client.run_round`, driven from the host against the
+   3 live containers, mirroring exactly what `aggregator_secure_mpc.py`
+   does), with negative and fractional values and the
+   `DATASET_SIZE_LAYER_NAME` pseudo-layer both included — revealed raw
+   weighted sum and final weighted average matched the expected plaintext
+   computation exactly (dataset-size total: revealed `60.0` vs. expected
+   `60`; weighted sum `[85.0, 60.0, 42.5]` vs. expected the same; final
+   average `[1.4167, 1.0, 0.7083]` vs. expected the same).
+
+**Tetrad (PROTOCOL=8)**, built and run via the real
+`docker-compose.tetrad.yml` override (`docker compose -f docker-compose.yaml
+-f docker-compose.tetrad.yml up --build secure_agg_party0 secure_agg_party1
+secure_agg_party2 secure_agg_party3`) — a real 4th service, not just
+different build args on the existing 3:
+
+1. First build attempt (targeting just the `hpmpc-build` stage, all 4
+   parties) compiled successfully on the first try — the per-party
+   class-visibility pitfall was already known and guarded against from the
+   Trio work, so it didn't need rediscovering.
+2. Full runtime image built and all 4 containers started; all 4 reported
+   `HealthCheck` `ready=True, backend_id="hpmpc"` — confirms
+   `_check_config_consistency()` passed for real on all 4 (protocol=8,
+   bitlength/frac_bits all matched).
+3. A real 3-client, 4-party round (same `share_and_submit` +
+   `run_round` pattern as Trio's verification), with negative and
+   fractional values and the `DATASET_SIZE_LAYER_NAME` pseudo-layer —
+   revealed weighted sum `[175.0, -81.25, -1975.0]` and dataset-size total
+   `175.0`, both matching the hand-computed expected values exactly.
+4. Two real share-corruption experiments (manually constructing a
+   deliberately inconsistent `Tetrad4PCScheme` share for one party and
+   submitting it via a hand-crafted `SubmitShare` call) to test the
+   malicious-abort path for real, not just via a mocked subprocess exit
+   code — **neither was caught by hpmpc's own `compare_views` mechanism**;
+   see "Malicious-security caveat, found empirically" above for the full
+   finding and the leading (unconfirmed) hypothesis for why.
+5. Containers torn down (`docker compose down`) afterward, restoring the
+   default (no party containers running) state, matching the pattern used
+   after Trio's verification.
+
 `tests/unit/test_backend_hpmpc.py` covers the file-format glue and the
 config-consistency check with a mocked subprocess (no real binary needed,
-runs in the fast CI tier). A `slow_hpmpc_build`-marked e2e test that
-actually builds and runs the binaries (codifying steps 3-5 above as an
-automated, opt-in test) is a documented follow-up, not yet written.
+runs in the fast CI tier) for all three protocols, including a
+malicious-abort test (`test_run_aggregation_round_raises_on_malicious_abort_detected_by_hpmpc`)
+that confirms `HpmpcBackend` correctly surfaces a nonzero exit code as a
+`RuntimeError` *when hpmpc does detect and abort* — this tests
+`HpmpcBackend`'s own error-surfacing logic (real and correct), not whether
+hpmpc's `compare_views` actually fires for arbitrary corruptions in this
+integration (empirically, per step 4 above, it may not). A
+`slow_hpmpc_build`-marked e2e test that automates steps 2-5 (Replicated) /
+1-3 (Trio) / 1-3 (Tetrad) above as a repeatable, CI-runnable (opt-in) test is
+a documented follow-up, not yet written — the verification above was done
+manually, once, against real containers.

@@ -27,6 +27,15 @@
 
 FROM ubuntu:22.04 AS hpmpc-build
 
+# Which hpmpc protocol to compile this image's party executables for --
+# replicated (PROTOCOL=2), trio (PROTOCOL=5), or tetrad (PROTOCOL=8, needs 4
+# parties, not 3 -- see docker-compose.tetrad.yml). Maps 1:1 to
+# scripts/build_secure_agg.sh's own <name> argument and its
+# executables/<name>/ output directory; keep this ARG and the runtime
+# stage's COPY path (below) in sync with whichever docker-compose override
+# builds this image.
+ARG HPMPC_PROTOCOL_NAME=replicated
+
 # ubuntu:22.04 (not 24.04): its default Python is 3.10, which the pinned
 # 2023-era requirements.txt (numpy==1.24.3 etc.) has prebuilt wheels for --
 # on 24.04's default Python 3.12 those packages have no wheel and fall back
@@ -45,13 +54,17 @@ RUN apt-get update && \
 WORKDIR /hpmpc
 COPY --from=hpmpc_src . /hpmpc
 
-# See scripts/build_fedavg_secure_aggregation.sh for why RANDOM_ALGORITHM=0 /
-# USE_SSL=0 are used here (portable, no x86 AES-NI dependency) and the
-# production-hardening note (real TLS certs, RANDOM_ALGORITHM=2 on x86).
-RUN bash scripts/build_fedavg_secure_aggregation.sh 64 13
+# See scripts/build_secure_agg.sh for why RANDOM_ALGORITHM=0 / USE_SSL=0 are
+# used here (portable, no x86 AES-NI dependency) and the production-
+# hardening note (real TLS certs, RANDOM_ALGORITHM=2 on x86).
+RUN bash scripts/build_secure_agg.sh ${HPMPC_PROTOCOL_NAME} 64 13
 
 
 FROM ubuntu:22.04 AS runtime
+# ARGs don't carry across FROM stages automatically -- re-declared here so
+# the COPY below can select the matching executables/<name>/ subdirectory
+# built above.
+ARG HPMPC_PROTOCOL_NAME=replicated
 ENV DOCKER_RUNNING=True
 ENV REDIS_IP=10.24.24.32 REDIS_PORT=6379
 
@@ -67,7 +80,7 @@ COPY src/server/requirements.txt .
 RUN pip3 install -r requirements.txt && \
     pip3 install torch --index-url https://download.pytorch.org/whl/cpu
 
-COPY --from=hpmpc-build /hpmpc/executables /opt/hpmpc/executables
+COPY --from=hpmpc-build /hpmpc/executables/${HPMPC_PROTOCOL_NAME} /opt/hpmpc/executables/${HPMPC_PROTOCOL_NAME}
 
 COPY docker/secure_agg_party_entrypoint.sh .
 COPY src .

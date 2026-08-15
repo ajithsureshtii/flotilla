@@ -1,10 +1,15 @@
 # Config for one secure-aggregation party process (src/flo_secure_agg_party.py).
-# Run this file 3 times (once per party) -- see docs/secure_aggregation/topology.md.
-# The handful of fields that legitimately differ per party can also be set via
-# env vars (PARTY_INDEX, BIND_PORT, BACKEND_PORT, PEERS_JSON as a JSON string,
-# BACKEND_TYPE) so the SAME checked-in file can be reused across all 3
-# containers -- see docker/docker-compose.yaml and
-# flo_secure_agg_party.py's _apply_env_overrides.
+# Run this file 3 (or, for hpmpc protocol 8/Tetrad, 4) times, once per party --
+# see docs/secure_aggregation/topology.md. The handful of fields that
+# legitimately differ per party (or per protocol) can also be set via env
+# vars (PARTY_INDEX, NUM_PARTIES, BIND_PORT, BACKEND_PORT, PEERS_JSON as a
+# JSON string, SHARING_SCHEME, BACKEND_TYPE, HPMPC_PROTOCOL,
+# HPMPC_EXECUTABLE_DIR) so the SAME checked-in file can be reused across all
+# party containers -- see docker/docker-compose.yaml and
+# flo_secure_agg_party.py's _apply_env_overrides. NUM_PARTIES/SHARING_SCHEME
+# only need overriding for Tetrad (num_parties: 4, sharing_scheme:
+# tetrad4pc) -- Replicated/Trio both use this file's checked-in defaults
+# (num_parties: 3, sharing_scheme: replicated3pc) unchanged.
 
 party_index: <0, 1, or 2>
 num_parties: 3
@@ -30,8 +35,16 @@ backend:
   simulator:
     bind_host: 0.0.0.0   # optional; defaults to the top-level bind_host above
   hpmpc:
-    executable_dir: <path_to_hpmpc/executables>   # e.g. /opt/hpmpc/executables in the container
+    protocol: 2   # 2 (Replicated 3PC) | 5 (Trio) | 8 (Tetrad, malicious, needs num_parties: 4)
+                  # -- required, no default; must match how the executables at
+                  # executable_dir below were actually compiled (checked at
+                  # startup -- see hpmpc_backend.md's config-consistency check)
+    executable_dir: <path_to_hpmpc/executables/PROTOCOL_NAME>   # e.g. /opt/hpmpc/executables/replicated
     tmp_dir: <scratch_dir_for_per-round_input/output_files>  # e.g. /tmp/secure_agg
+    log_stdout: False   # debug/benchmarking aid: logs hpmpc's own per-round
+                         # timing/communication stdout via FedLogger. Off by
+                         # default (log spam in normal deployments) -- see
+                         # docs/secure_aggregation/hpmpc_backend.md.
 
 state:
   state_location: inmemory

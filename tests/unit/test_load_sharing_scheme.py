@@ -16,6 +16,12 @@ def test_loads_shamir_stub_by_name():
     assert module.SCHEME_CLASS.scheme_id == "shamir_stub"
 
 
+def test_loads_tetrad4pc_by_name():
+    module = load_sharing_scheme("test-session", "tetrad4pc")
+    assert module.SCHEME_CLASS.scheme_id == "tetrad4pc"
+    assert module.SCHEME_CLASS.num_parties == 4
+
+
 def test_unknown_scheme_name_returns_none_without_raising():
     result = load_sharing_scheme("test-session", "does_not_exist")
     assert result is None

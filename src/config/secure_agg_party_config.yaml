@@ -23,12 +23,14 @@ fixed_point:
 
 backend:
   type: simulator   # switch to hpmpc (or set BACKEND_TYPE=hpmpc) once executables are built --
-                     # see hpmpc/scripts/build_fedavg_secure_aggregation.sh
+                     # see hpmpc/scripts/build_secure_agg.sh
   simulator:
     bind_host: 0.0.0.0
   hpmpc:
-    executable_dir: /opt/hpmpc/executables
+    protocol: 2   # 2 (Replicated 3PC) | 5 (Trio) | 8 (Tetrad) -- must match executable_dir below
+    executable_dir: /opt/hpmpc/executables/replicated
     tmp_dir: /tmp/secure_agg
+    log_stdout: False
 
 state:
   state_location: inmemory

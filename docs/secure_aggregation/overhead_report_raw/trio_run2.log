@@ -1,0 +1,194 @@
+2026-08-15 17:21:52.512,AGGREGATION_LOADER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregation.module,Aggregation module name:,server.aggregation.aggregator_secure_mpc
+2026-08-15 17:21:52.600,LOSS_FUNC_LOADER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.loss_function.module,Loss function module name:,server.loss.loss_function_crossentropy
+2026-08-15 17:21:52.602,OPTIMIZER_LOADER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.optimizer.module,Optimizer module name:,server.optimizer.optimizer_adam
+2026-08-15 17:21:52.605,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,session_id,7f2fb8e0-eda9-47ab-a438-73979adf50ac
+2026-08-15 17:21:52.605,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.echo.init,num_of_clients,6
+2026-08-15 17:21:52.605,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.echo.start,connecting_to,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:21:52.606,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.echo.start,connecting_to,63d97c62-9511-4bfc-b647-647eada80e8c
+2026-08-15 17:21:52.606,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.echo.start,connecting_to,e9015347-12ab-4c2c-bfa0-a7383830be84
+2026-08-15 17:21:52.610,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.echo.response,client_replied,63d97c62-9511-4bfc-b647-647eada80e8c
+2026-08-15 17:21:52.612,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.echo.client.finished,client_id - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,0.005816936492919922
+2026-08-15 17:21:52.612,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.echo.response,client_replied,e9015347-12ab-4c2c-bfa0-a7383830be84
+2026-08-15 17:21:52.612,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.echo.client.finished,client_id - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,0.00622868537902832
+2026-08-15 17:21:52.612,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.echo.response,client_replied,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:21:52.612,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.echo.client.finished,client_id - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,0.007124423980712891
+2026-08-15 17:21:52.613,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.echo.finished,time_taken,0.007785320281982422
+2026-08-15 17:21:52.616,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train_session.init,1786814512.6138396
+2026-08-15 17:21:52.616,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train_session.config,model-dataset_id-training_rounds-epochs-batch_size-loss_fun-optimizer-lr-timeout-benchmark-model-aggregator-aggregator_args-client_selection-client_selection_args,LeNet5_class,MNIST,3,1,64,crossentropy,adam,0.01,180,LeNet5,secure_mpc,{'sharing_scheme': 'replicated3pc', 'num_parties': 3, 'party_endpoints': [{'party_index': 0, 'host': 'secure_agg_party0', 'port': 50100}, {'party_index': 1, 'host': 'secure_agg_party1', 'port': 50101}, {'party_index': 2, 'host': 'secure_agg_party2', 'port': 50102}], 'fixed_point': {'bitlength': 64, 'frac_bits': 13}, 'round_timeout_s': 120, 'verify_party_agreement': True},fedavg,{'client_fraction': 1}
+2026-08-15 17:21:52.616,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.rounds,3
+2026-08-15 17:21:52.622,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,train.client_selection.time_taken,0.0027391910552978516
+2026-08-15 17:21:52.625,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.init,round_no-num_clients-clients,0,3,e9015347-12ab-4c2c-bfa0-a7383830be84,63d97c62-9511-4bfc-b647-647eada80e8c,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:21:52.627,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.init,
+2026-08-15 17:21:52.627,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.cache_hit,Client:e9015347-12ab-4c2c-bfa0-a7383830be84 has model LeNet5,e9015347-12ab-4c2c-bfa0-a7383830be84,LeNet5
+2026-08-15 17:21:52.627,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.client.finished,client_id - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,0.0002560615539550781
+2026-08-15 17:21:52.627,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.cache_hit,Client:63d97c62-9511-4bfc-b647-647eada80e8c has model LeNet5,63d97c62-9511-4bfc-b647-647eada80e8c,LeNet5
+2026-08-15 17:21:52.627,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.client.finished,client_id - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,9.489059448242188e-05
+2026-08-15 17:21:52.627,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.cache_hit,Client:038236b5-502b-44c4-b34e-76d1f60f7c50 has model LeNet5,038236b5-502b-44c4-b34e-76d1f60f7c50,LeNet5
+2026-08-15 17:21:52.627,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.client.finished,client_id - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,8.082389831542969e-05
+2026-08-15 17:21:52.627,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.finished,time_taken,0.0007944107055664062
+2026-08-15 17:21:52.628,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.connect,connecting to,e9015347-12ab-4c2c-bfa0-a7383830be84
+2026-08-15 17:21:52.628,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.await.response,e9015347-12ab-4c2c-bfa0-a7383830be84
+2026-08-15 17:21:52.629,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.model_wts.pickle.time,client_id-round_no-time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,0,0.0008318424224853516
+2026-08-15 17:21:52.629,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.loss_function.pickle.time,client_id - round_no - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,0,8.106231689453125e-06
+2026-08-15 17:21:52.630,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.optimizer.pickle.time,client_id - round_no - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,0,0.0009400844573974609
+2026-08-15 17:21:52.630,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.connect,connecting to,63d97c62-9511-4bfc-b647-647eada80e8c
+2026-08-15 17:21:52.630,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.await.response,63d97c62-9511-4bfc-b647-647eada80e8c
+2026-08-15 17:21:52.632,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.model_wts.pickle.time,client_id-round_no-time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,0,0.001157999038696289
+2026-08-15 17:21:52.632,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.loss_function.pickle.time,client_id - round_no - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,0,9.775161743164062e-06
+2026-08-15 17:21:52.633,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.optimizer.pickle.time,client_id - round_no - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,0,0.0012891292572021484
+2026-08-15 17:21:52.634,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.connect,connecting to,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:21:52.634,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.await.response,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:21:52.635,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.model_wts.pickle.time,client_id-round_no-time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,0,0.0008518695831298828
+2026-08-15 17:21:52.635,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.loss_function.pickle.time,client_id - round_no - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,0,7.62939453125e-06
+2026-08-15 17:21:52.636,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.optimizer.pickle.time,client_id - round_no - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,0,0.0007305145263671875
+2026-08-15 17:22:24.291,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.await.response_time,63d97c62-9511-4bfc-b647-647eada80e8c,0,31.65749955177307
+2026-08-15 17:22:24.291,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.client.finished,client_id-round_no-time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,0,31.66087770462036
+2026-08-15 17:22:24.291,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.results,0,63d97c62-9511-4bfc-b647-647eada80e8c,time_taken_s-num_epochs-total_mini_batches-loss-accuracy,31.480820417404175-1.0-287-0.281-90.918
+2026-08-15 17:22:24.291,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.client.finished,client_id-round_no-time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,0,31.661421060562134
+2026-08-15 17:22:24.295,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.called,client_id-active,63d97c62-9511-4bfc-b647-647eada80e8c,True
+2026-08-15 17:22:24.299,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,train.client_selection.time_taken,0.0002808570861816406
+2026-08-15 17:22:24.403,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.await.response_time,e9015347-12ab-4c2c-bfa0-a7383830be84,0,31.772921323776245
+2026-08-15 17:22:24.403,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.client.finished,client_id-round_no-time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,0,31.775401830673218
+2026-08-15 17:22:24.403,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.results,0,e9015347-12ab-4c2c-bfa0-a7383830be84,time_taken_s-num_epochs-total_mini_batches-loss-accuracy,31.502508401870728-1.0-287-0.296-90.668
+2026-08-15 17:22:24.403,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.client.finished,client_id-round_no-time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,0,31.775898456573486
+2026-08-15 17:22:24.407,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.called,client_id-active,e9015347-12ab-4c2c-bfa0-a7383830be84,True
+2026-08-15 17:22:24.412,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,train.client_selection.time_taken,8.487701416015625e-05
+2026-08-15 17:22:24.520,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.await.response_time,038236b5-502b-44c4-b34e-76d1f60f7c50,0,31.883997440338135
+2026-08-15 17:22:24.520,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.client.finished,client_id-round_no-time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,0,31.88643789291382
+2026-08-15 17:22:24.521,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.results,0,038236b5-502b-44c4-b34e-76d1f60f7c50,time_taken_s-num_epochs-total_mini_batches-loss-accuracy,31.633304595947266-1.0-287-0.307-89.965
+2026-08-15 17:22:24.521,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.client.finished,client_id-round_no-time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,0,31.88719344139099
+2026-08-15 17:22:24.524,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.called,client_id-active,038236b5-502b-44c4-b34e-76d1f60f7c50,True
+2026-08-15 17:22:24.526,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.round_ready,clients,['e9015347-12ab-4c2c-bfa0-a7383830be84', '63d97c62-9511-4bfc-b647-647eada80e8c', '038236b5-502b-44c4-b34e-76d1f60f7c50']
+2026-08-15 17:22:24.592,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.round_complete,7f2fb8e0-eda9-47ab-a438-73979adf50ac:0
+2026-08-15 17:22:24.592,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.revealed_total_dataset_size,7f2fb8e0-eda9-47ab-a438-73979adf50ac:0,58000
+2026-08-15 17:22:24.980,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train_callback.server_validation_time,0.3853163719177246
+2026-08-15 17:22:24.981,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train_callback,round_no,accuracy,loss,1,82.35,1.3397076070308684
+2026-08-15 17:22:24.981,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train_callback.aggregate_time,0,0.0707552433013916
+2026-08-15 17:22:24.982,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.server_round_time,0,32.36319160461426
+2026-08-15 17:22:24.984,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,train.client_selection.time_taken,0.0006666183471679688
+2026-08-15 17:22:24.986,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.init,round_no-num_clients-clients,1,3,e9015347-12ab-4c2c-bfa0-a7383830be84,63d97c62-9511-4bfc-b647-647eada80e8c,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:22:24.987,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.init,
+2026-08-15 17:22:24.987,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.cache_hit,Client:e9015347-12ab-4c2c-bfa0-a7383830be84 has model LeNet5,e9015347-12ab-4c2c-bfa0-a7383830be84,LeNet5
+2026-08-15 17:22:24.987,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.client.finished,client_id - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,0.0002532005310058594
+2026-08-15 17:22:24.988,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.cache_hit,Client:63d97c62-9511-4bfc-b647-647eada80e8c has model LeNet5,63d97c62-9511-4bfc-b647-647eada80e8c,LeNet5
+2026-08-15 17:22:24.988,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.client.finished,client_id - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,0.00028324127197265625
+2026-08-15 17:22:24.988,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.cache_hit,Client:038236b5-502b-44c4-b34e-76d1f60f7c50 has model LeNet5,038236b5-502b-44c4-b34e-76d1f60f7c50,LeNet5
+2026-08-15 17:22:24.988,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.client.finished,client_id - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,0.00019025802612304688
+2026-08-15 17:22:24.988,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.finished,time_taken,0.0011763572692871094
+2026-08-15 17:22:24.988,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.connect,connecting to,e9015347-12ab-4c2c-bfa0-a7383830be84
+2026-08-15 17:22:24.989,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.await.response,e9015347-12ab-4c2c-bfa0-a7383830be84
+2026-08-15 17:22:24.990,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.model_wts.pickle.time,client_id-round_no-time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,1,0.0008246898651123047
+2026-08-15 17:22:24.990,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.loss_function.pickle.time,client_id - round_no - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,1,7.62939453125e-06
+2026-08-15 17:22:24.991,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.optimizer.pickle.time,client_id - round_no - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,1,0.0008518695831298828
+2026-08-15 17:22:24.991,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.connect,connecting to,63d97c62-9511-4bfc-b647-647eada80e8c
+2026-08-15 17:22:24.991,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.await.response,63d97c62-9511-4bfc-b647-647eada80e8c
+2026-08-15 17:22:24.992,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.model_wts.pickle.time,client_id-round_no-time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,1,0.0008478164672851562
+2026-08-15 17:22:24.992,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.loss_function.pickle.time,client_id - round_no - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,1,6.9141387939453125e-06
+2026-08-15 17:22:24.993,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.optimizer.pickle.time,client_id - round_no - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,1,0.0006306171417236328
+2026-08-15 17:22:24.993,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.connect,connecting to,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:22:24.993,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.await.response,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:22:24.994,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.model_wts.pickle.time,client_id-round_no-time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,1,0.0007319450378417969
+2026-08-15 17:22:24.994,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.loss_function.pickle.time,client_id - round_no - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,1,5.4836273193359375e-06
+2026-08-15 17:22:24.995,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.optimizer.pickle.time,client_id - round_no - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,1,0.0006513595581054688
+2026-08-15 17:22:43.384,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.await.response_time,63d97c62-9511-4bfc-b647-647eada80e8c,1,18.390833854675293
+2026-08-15 17:22:43.384,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.client.finished,client_id-round_no-time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,1,18.393133640289307
+2026-08-15 17:22:43.385,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.results,1,63d97c62-9511-4bfc-b647-647eada80e8c,time_taken_s-num_epochs-total_mini_batches-loss-accuracy,18.275469064712524-1.0-287-0.157-95.584
+2026-08-15 17:22:43.385,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.client.finished,client_id-round_no-time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,1,18.39393377304077
+2026-08-15 17:22:43.388,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.called,client_id-active,63d97c62-9511-4bfc-b647-647eada80e8c,True
+2026-08-15 17:22:43.392,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,train.client_selection.time_taken,0.00010013580322265625
+2026-08-15 17:22:43.394,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.await.response_time,038236b5-502b-44c4-b34e-76d1f60f7c50,1,18.398882389068604
+2026-08-15 17:22:43.394,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.client.finished,client_id-round_no-time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,1,18.40091872215271
+2026-08-15 17:22:43.394,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.results,1,038236b5-502b-44c4-b34e-76d1f60f7c50,time_taken_s-num_epochs-total_mini_batches-loss-accuracy,18.246817111968994-1.0-287-0.164-95.628
+2026-08-15 17:22:43.394,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.client.finished,client_id-round_no-time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,1,18.40136694908142
+2026-08-15 17:22:43.397,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.called,client_id-active,038236b5-502b-44c4-b34e-76d1f60f7c50,True
+2026-08-15 17:22:43.402,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,train.client_selection.time_taken,0.00017309188842773438
+2026-08-15 17:22:43.661,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.await.response_time,e9015347-12ab-4c2c-bfa0-a7383830be84,1,18.67007350921631
+2026-08-15 17:22:43.661,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.client.finished,client_id-round_no-time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,1,18.672569274902344
+2026-08-15 17:22:43.662,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.results,1,e9015347-12ab-4c2c-bfa0-a7383830be84,time_taken_s-num_epochs-total_mini_batches-loss-accuracy,18.537758827209473-1.0-287-0.153-95.862
+2026-08-15 17:22:43.662,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.client.finished,client_id-round_no-time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,1,18.673264026641846
+2026-08-15 17:22:43.665,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.called,client_id-active,e9015347-12ab-4c2c-bfa0-a7383830be84,True
+2026-08-15 17:22:43.667,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.round_ready,clients,['e9015347-12ab-4c2c-bfa0-a7383830be84', '63d97c62-9511-4bfc-b647-647eada80e8c', '038236b5-502b-44c4-b34e-76d1f60f7c50']
+2026-08-15 17:22:43.718,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.round_complete,7f2fb8e0-eda9-47ab-a438-73979adf50ac:1
+2026-08-15 17:22:43.718,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.revealed_total_dataset_size,7f2fb8e0-eda9-47ab-a438-73979adf50ac:1,58000
+2026-08-15 17:22:44.093,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train_callback.server_validation_time,0.37261247634887695
+2026-08-15 17:22:44.094,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train_callback,round_no,accuracy,loss,2,98.35000000000001,0.08276291666552424
+2026-08-15 17:22:44.094,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train_callback.aggregate_time,1,0.05596446990966797
+2026-08-15 17:22:44.094,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.server_round_time,1,19.112692832946777
+2026-08-15 17:22:44.097,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,train.client_selection.time_taken,0.0006749629974365234
+2026-08-15 17:22:44.098,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.init,round_no-num_clients-clients,2,3,e9015347-12ab-4c2c-bfa0-a7383830be84,63d97c62-9511-4bfc-b647-647eada80e8c,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:22:44.102,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.init,
+2026-08-15 17:22:44.104,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.cache_hit,Client:e9015347-12ab-4c2c-bfa0-a7383830be84 has model LeNet5,e9015347-12ab-4c2c-bfa0-a7383830be84,LeNet5
+2026-08-15 17:22:44.104,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.client.finished,client_id - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,0.002259969711303711
+2026-08-15 17:22:44.104,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.cache_hit,Client:63d97c62-9511-4bfc-b647-647eada80e8c has model LeNet5,63d97c62-9511-4bfc-b647-647eada80e8c,LeNet5
+2026-08-15 17:22:44.105,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.client.finished,client_id - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,0.0004112720489501953
+2026-08-15 17:22:44.105,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.cache_hit,Client:038236b5-502b-44c4-b34e-76d1f60f7c50 has model LeNet5,038236b5-502b-44c4-b34e-76d1f60f7c50,LeNet5
+2026-08-15 17:22:44.105,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.client.finished,client_id - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,0.0001506805419921875
+2026-08-15 17:22:44.105,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.finished,time_taken,0.0032684803009033203
+2026-08-15 17:22:44.108,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.connect,connecting to,e9015347-12ab-4c2c-bfa0-a7383830be84
+2026-08-15 17:22:44.109,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.await.response,e9015347-12ab-4c2c-bfa0-a7383830be84
+2026-08-15 17:22:44.109,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.model_wts.pickle.time,client_id-round_no-time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,2,0.0007848739624023438
+2026-08-15 17:22:44.110,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.loss_function.pickle.time,client_id - round_no - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,2,3.0994415283203125e-05
+2026-08-15 17:22:44.111,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.optimizer.pickle.time,client_id - round_no - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,2,0.001497030258178711
+2026-08-15 17:22:44.111,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.connect,connecting to,63d97c62-9511-4bfc-b647-647eada80e8c
+2026-08-15 17:22:44.112,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.await.response,63d97c62-9511-4bfc-b647-647eada80e8c
+2026-08-15 17:22:44.112,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.model_wts.pickle.time,client_id-round_no-time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,2,0.0005946159362792969
+2026-08-15 17:22:44.112,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.loss_function.pickle.time,client_id - round_no - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,2,5.9604644775390625e-06
+2026-08-15 17:22:44.113,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.optimizer.pickle.time,client_id - round_no - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,2,0.0006506443023681641
+2026-08-15 17:22:44.113,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.connect,connecting to,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:22:44.114,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.await.response,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:22:44.115,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.model_wts.pickle.time,client_id-round_no-time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,2,0.0010173320770263672
+2026-08-15 17:22:44.115,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.loss_function.pickle.time,client_id - round_no - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,2,9.5367431640625e-06
+2026-08-15 17:22:44.117,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.optimizer.pickle.time,client_id - round_no - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,2,0.0016510486602783203
+2026-08-15 17:23:02.229,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.await.response_time,038236b5-502b-44c4-b34e-76d1f60f7c50,2,18.11261773109436
+2026-08-15 17:23:02.230,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.client.finished,client_id-round_no-time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,2,18.116401195526123
+2026-08-15 17:23:02.230,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.results,2,038236b5-502b-44c4-b34e-76d1f60f7c50,time_taken_s-num_epochs-total_mini_batches-loss-accuracy,18.018739700317383-1.0-287-0.12-96.755
+2026-08-15 17:23:02.230,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.client.finished,client_id-round_no-time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,2,18.116896152496338
+2026-08-15 17:23:02.235,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.called,client_id-active,038236b5-502b-44c4-b34e-76d1f60f7c50,True
+2026-08-15 17:23:02.239,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,train.client_selection.time_taken,0.0001308917999267578
+2026-08-15 17:23:02.254,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.await.response_time,63d97c62-9511-4bfc-b647-647eada80e8c,2,18.141098976135254
+2026-08-15 17:23:02.254,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.client.finished,client_id-round_no-time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,2,18.142972707748413
+2026-08-15 17:23:02.255,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.results,2,63d97c62-9511-4bfc-b647-647eada80e8c,time_taken_s-num_epochs-total_mini_batches-loss-accuracy,18.004194498062134-1.0-287-0.122-96.853
+2026-08-15 17:23:02.256,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.client.finished,client_id-round_no-time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,2,18.144261837005615
+2026-08-15 17:23:02.264,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.called,client_id-active,63d97c62-9511-4bfc-b647-647eada80e8c,True
+2026-08-15 17:23:02.268,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,train.client_selection.time_taken,0.00022554397583007812
+2026-08-15 17:23:02.503,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.await.response_time,e9015347-12ab-4c2c-bfa0-a7383830be84,2,18.391806840896606
+2026-08-15 17:23:02.503,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.client.finished,client_id-round_no-time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,2,18.395166873931885
+2026-08-15 17:23:02.504,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.results,2,e9015347-12ab-4c2c-bfa0-a7383830be84,time_taken_s-num_epochs-total_mini_batches-loss-accuracy,18.281798124313354-1.0-287-0.123-96.777
+2026-08-15 17:23:02.504,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.round.client.finished,client_id-round_no-time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,2,18.395751953125
+2026-08-15 17:23:02.507,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.called,client_id-active,e9015347-12ab-4c2c-bfa0-a7383830be84,True
+2026-08-15 17:23:02.508,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.round_ready,clients,['e9015347-12ab-4c2c-bfa0-a7383830be84', '63d97c62-9511-4bfc-b647-647eada80e8c', '038236b5-502b-44c4-b34e-76d1f60f7c50']
+2026-08-15 17:23:02.560,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.round_complete,7f2fb8e0-eda9-47ab-a438-73979adf50ac:2
+2026-08-15 17:23:02.560,AGGREGATOR,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.aggregator.secure_mpc.revealed_total_dataset_size,7f2fb8e0-eda9-47ab-a438-73979adf50ac:2,58000
+2026-08-15 17:23:02.935,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train_callback.server_validation_time,0.37264084815979004
+2026-08-15 17:23:02.935,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train_callback,round_no,accuracy,loss,3,97.75,0.0856016032397747
+2026-08-15 17:23:02.936,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train_callback.aggregate_time,2,0.05559515953063965
+2026-08-15 17:23:02.936,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.train.server_round_time,2,18.841466188430786
+2026-08-15 17:23:02.938,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,train.client_selection.time_taken,0.0007584095001220703
+2026-08-15 17:23:02.941,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.init,round_no-num_clients-clients,3,3,e9015347-12ab-4c2c-bfa0-a7383830be84,63d97c62-9511-4bfc-b647-647eada80e8c,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:23:02.942,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.init,
+2026-08-15 17:23:02.943,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.cache_hit,Client:e9015347-12ab-4c2c-bfa0-a7383830be84 has model LeNet5,e9015347-12ab-4c2c-bfa0-a7383830be84,LeNet5
+2026-08-15 17:23:02.943,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.client.finished,client_id - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,0.0002551078796386719
+2026-08-15 17:23:02.943,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.cache_hit,Client:63d97c62-9511-4bfc-b647-647eada80e8c has model LeNet5,63d97c62-9511-4bfc-b647-647eada80e8c,LeNet5
+2026-08-15 17:23:02.943,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.client.finished,client_id - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,0.0003535747528076172
+2026-08-15 17:23:02.943,SESSION_MANAGER,DEBUG,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.cache_hit,Client:038236b5-502b-44c4-b34e-76d1f60f7c50 has model LeNet5,038236b5-502b-44c4-b34e-76d1f60f7c50,LeNet5
+2026-08-15 17:23:02.943,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.client.finished,client_id - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,0.00025081634521484375
+2026-08-15 17:23:02.943,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.send_model.finished,time_taken,0.0012750625610351562
+2026-08-15 17:23:02.944,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver.session.loop_runtime,70.33024072647095
+2026-08-15 17:23:02.944,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,session.train.accuracy,82.35,98.35000000000001,97.75
+2026-08-15 17:23:02.944,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,session.train.loss,1.3397076070308684,0.08276291666552424,0.0856016032397747
+2026-08-15 17:23:02.944,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_session_finished_running,7f2fb8e0-eda9-47ab-a438-73979adf50ac.finished_running
+2026-08-15 17:23:02.944,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.connect,connecting to,e9015347-12ab-4c2c-bfa0-a7383830be84
+2026-08-15 17:23:02.944,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.await.response,e9015347-12ab-4c2c-bfa0-a7383830be84
+2026-08-15 17:23:02.945,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.model_wts.pickle.time,client_id-round_no-time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,3,0.0008499622344970703
+2026-08-15 17:23:02.945,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.loss_function.pickle.time,client_id - round_no - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,3,8.344650268554688e-06
+2026-08-15 17:23:02.946,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.optimizer.pickle.time,client_id - round_no - time_taken,e9015347-12ab-4c2c-bfa0-a7383830be84,3,0.0006668567657470703
+2026-08-15 17:23:02.946,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.connect,connecting to,63d97c62-9511-4bfc-b647-647eada80e8c
+2026-08-15 17:23:02.947,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.await.response,63d97c62-9511-4bfc-b647-647eada80e8c
+2026-08-15 17:23:02.948,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.model_wts.pickle.time,client_id-round_no-time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,3,0.0009641647338867188
+2026-08-15 17:23:02.948,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.loss_function.pickle.time,client_id - round_no - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,3,7.3909759521484375e-06
+2026-08-15 17:23:02.948,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.optimizer.pickle.time,client_id - round_no - time_taken,63d97c62-9511-4bfc-b647-647eada80e8c,3,0.0006759166717529297
+2026-08-15 17:23:02.949,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.connect,connecting to,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:23:02.949,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.await.response,038236b5-502b-44c4-b34e-76d1f60f7c50
+2026-08-15 17:23:02.950,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.model_wts.pickle.time,client_id-round_no-time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,3,0.000997781753540039
+2026-08-15 17:23:02.950,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.loss_function.pickle.time,client_id - round_no - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,3,8.344650268554688e-06
+2026-08-15 17:23:02.951,SESSION_MANAGER,INFO,7f2fb8e0-eda9-47ab-a438-73979adf50ac,fedserver_gRPC.train.round.optimizer.pickle.time,client_id - round_no - time_taken,038236b5-502b-44c4-b34e-76d1f60f7c50,3,0.0006277561187744141

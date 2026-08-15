@@ -106,13 +106,13 @@ practice, treat it as a bug report, not routine noise:
 
 ## Rebuilding the hpmpc executables after a config change
 
-If you change `fixed_point.bitlength`/`frac_bits` in the party configs, the
-compiled executables must be rebuilt to match (or
+If you change `backend.hpmpc.protocol` or `fixed_point.bitlength`/`frac_bits`
+in the party configs, the compiled executables must be rebuilt to match (or
 `HpmpcBackend._check_config_consistency()` will refuse to start):
 
 ```bash
 cd hpmpc
-scripts/build_fedavg_secure_aggregation.sh <bitlength> <frac_bits>
+scripts/build_secure_agg.sh <replicated|trio|tetrad> <bitlength> <frac_bits>
 ```
 
 Then rebuild the party image(s):

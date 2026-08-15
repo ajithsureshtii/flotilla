@@ -1,0 +1,86 @@
+# Compose override selecting hpmpc PROTOCOL=8 ("Tetrad", malicious-secure)
+# instead of the default PROTOCOL=2 ("Replicated 3PC"). Unlike Trio (same
+# 3-party topology as the base file), Tetrad genuinely needs a 4th party --
+# its masking structure has no 3-party-derivable form (see
+# sharing_schemes/tetrad4pc.py's docstring) -- so this override both
+# reconfigures secure_agg_party0/1/2 (protocol, sharing_scheme, num_parties,
+# and their PEERS_JSON to include party 3) AND adds a new secure_agg_party3
+# service. See docs/secure_aggregation/hpmpc_backend.md's Tetrad section and
+# docs/secure_aggregation/runbook.md.
+#
+# Usage:
+#   docker compose -f docker-compose.yaml -f docker-compose.tetrad.yml up -d --build
+version: "3.7"
+services:
+  secure_agg_party0:
+    build:
+      args:
+        HPMPC_PROTOCOL_NAME: tetrad
+    environment:
+      NUM_PARTIES: 4
+      SHARING_SCHEME: tetrad4pc
+      HPMPC_PROTOCOL: 8
+      HPMPC_EXECUTABLE_DIR: /opt/hpmpc/executables/tetrad
+      PEERS_JSON: >-
+        [{"party_index":1,"host":"secure_agg_party1","backend_port":51101},
+        {"party_index":2,"host":"secure_agg_party2","backend_port":51102},
+        {"party_index":3,"host":"secure_agg_party3","backend_port":51103}]
+
+  secure_agg_party1:
+    build:
+      args:
+        HPMPC_PROTOCOL_NAME: tetrad
+    environment:
+      NUM_PARTIES: 4
+      SHARING_SCHEME: tetrad4pc
+      HPMPC_PROTOCOL: 8
+      HPMPC_EXECUTABLE_DIR: /opt/hpmpc/executables/tetrad
+      PEERS_JSON: >-
+        [{"party_index":0,"host":"secure_agg_party0","backend_port":51100},
+        {"party_index":2,"host":"secure_agg_party2","backend_port":51102},
+        {"party_index":3,"host":"secure_agg_party3","backend_port":51103}]
+
+  secure_agg_party2:
+    build:
+      args:
+        HPMPC_PROTOCOL_NAME: tetrad
+    environment:
+      NUM_PARTIES: 4
+      SHARING_SCHEME: tetrad4pc
+      HPMPC_PROTOCOL: 8
+      HPMPC_EXECUTABLE_DIR: /opt/hpmpc/executables/tetrad
+      PEERS_JSON: >-
+        [{"party_index":0,"host":"secure_agg_party0","backend_port":51100},
+        {"party_index":1,"host":"secure_agg_party1","backend_port":51101},
+        {"party_index":3,"host":"secure_agg_party3","backend_port":51103}]
+
+  # Tetrad's 4th party -- holds all 3 lambda shares but never the masked
+  # value (mv) itself (see tetrad4pc.py's docstring). Same image/build as
+  # parties 0-2, just a different PARTY_INDEX/PEERS_JSON.
+  secure_agg_party3:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.secure_agg_party.hpmpc
+      additional_contexts:
+        hpmpc_src: ../../hpmpc
+      args:
+        HPMPC_PROTOCOL_NAME: tetrad
+    container_name: secure_agg_party3
+    environment:
+      PARTY_INDEX: 3
+      NUM_PARTIES: 4
+      SHARING_SCHEME: tetrad4pc
+      BIND_PORT: 50103
+      BACKEND_PORT: 51103
+      BACKEND_TYPE: hpmpc
+      HPMPC_PROTOCOL: 8
+      HPMPC_EXECUTABLE_DIR: /opt/hpmpc/executables/tetrad
+      PEERS_JSON: >-
+        [{"party_index":0,"host":"secure_agg_party0","backend_port":51100},
+        {"party_index":1,"host":"secure_agg_party1","backend_port":51101},
+        {"party_index":2,"host":"secure_agg_party2","backend_port":51102}]
+    ports:
+      - "50103:50103"
+    networks:
+      - default
+      - secure-agg-network

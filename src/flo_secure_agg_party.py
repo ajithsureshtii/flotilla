@@ -25,6 +25,10 @@ def _apply_env_overrides(config: dict) -> dict:
     cleanly. Unset env vars leave the checked-in config value untouched."""
     if os.environ.get("PARTY_INDEX") is not None:
         config["party_index"] = int(os.environ["PARTY_INDEX"])
+    if os.environ.get("NUM_PARTIES") is not None:
+        config["num_parties"] = int(os.environ["NUM_PARTIES"])
+    if os.environ.get("SHARING_SCHEME") is not None:
+        config["sharing_scheme"] = os.environ["SHARING_SCHEME"]
     if os.environ.get("BIND_PORT") is not None:
         config["bind_port"] = int(os.environ["BIND_PORT"])
     if os.environ.get("BACKEND_PORT") is not None:
@@ -33,6 +37,10 @@ def _apply_env_overrides(config: dict) -> dict:
         config["peers"] = json.loads(os.environ["PEERS_JSON"])
     if os.environ.get("BACKEND_TYPE") is not None:
         config["backend"]["type"] = os.environ["BACKEND_TYPE"]
+    if os.environ.get("HPMPC_PROTOCOL") is not None:
+        config["backend"]["hpmpc"]["protocol"] = int(os.environ["HPMPC_PROTOCOL"])
+    if os.environ.get("HPMPC_EXECUTABLE_DIR") is not None:
+        config["backend"]["hpmpc"]["executable_dir"] = os.environ["HPMPC_EXECUTABLE_DIR"]
     return config
 
 
@@ -62,8 +70,13 @@ def _construct_backend(backend_module, backend_type, backend_config, party_index
             party_index=party_index,
             num_parties=num_parties,
             codec=codec,
+            # Required, no silent default -- see docs/secure_aggregation/
+            # hpmpc_backend.md. A missing value is a config bug, not
+            # something to paper over with protocol=2.
+            protocol=per_backend_config["protocol"],
             executable_dir=per_backend_config["executable_dir"],
             tmp_dir=per_backend_config.get("tmp_dir", "/tmp/secure_agg"),
+            log_stdout=per_backend_config.get("log_stdout", False),
         )
     raise ValueError(f"unknown backend type: {backend_type}")
 

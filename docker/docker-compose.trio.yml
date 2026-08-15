@@ -1,0 +1,36 @@
+# Compose override selecting hpmpc PROTOCOL=5 ("Trio") instead of the
+# default PROTOCOL=2 ("Replicated 3PC") -- same 3-party topology as the
+# base docker-compose.yaml (only the compiled binaries' PROTOCOL macro and
+# the party config's `protocol`/`executable_dir` values change), so this
+# override only needs to touch the existing secure_agg_party0/1/2 services'
+# build args and environment, not add/remove any service. See
+# docs/secure_aggregation/hpmpc_backend.md's Trio section and
+# docs/secure_aggregation/runbook.md.
+#
+# Usage:
+#   docker compose -f docker-compose.yaml -f docker-compose.trio.yml up -d --build
+version: "3.7"
+services:
+  secure_agg_party0:
+    build:
+      args:
+        HPMPC_PROTOCOL_NAME: trio
+    environment:
+      HPMPC_PROTOCOL: 5
+      HPMPC_EXECUTABLE_DIR: /opt/hpmpc/executables/trio
+
+  secure_agg_party1:
+    build:
+      args:
+        HPMPC_PROTOCOL_NAME: trio
+    environment:
+      HPMPC_PROTOCOL: 5
+      HPMPC_EXECUTABLE_DIR: /opt/hpmpc/executables/trio
+
+  secure_agg_party2:
+    build:
+      args:
+        HPMPC_PROTOCOL_NAME: trio
+    environment:
+      HPMPC_PROTOCOL: 5
+      HPMPC_EXECUTABLE_DIR: /opt/hpmpc/executables/trio

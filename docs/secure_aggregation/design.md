@@ -57,6 +57,40 @@ individual client's dataset size in `secure_mpc` mode. See
 `threat_model.md` for the updated protected/not-protected breakdown
 (including the degenerate single-client-round caveat this inherits).
 
+**Post-rollout enhancement: `HpmpcBackend` now supports multiple hpmpc
+protocols.** Originally, `HpmpcBackend` was hardcoded to hpmpc's
+`PROTOCOL=2` ("Replicated 3PC"). It now takes a required `protocol`
+constructor arg and internally dispatches to a small per-`(protocol,
+party_index)` share-packing strategy for the only genuinely
+protocol-specific pieces — share-conversion math and on-disk field
+count/layout; everything else (`start()`, peer sorting, hostname
+resolution, subprocess invocation, timeout/error handling) is shared,
+unchanged. Protocol is a config value (`backend.hpmpc.protocol`), not a
+different backend module — every hpmpc protocol shares the same
+integration shape, so splitting into separate backend modules per protocol
+number would triplicate the shared plumbing for no genericity benefit (see
+`hpmpc_backend.md`'s "Supporting multiple protocols" section). Trio
+(`PROTOCOL=5`, 3-party, semi-honest) and Tetrad (`PROTOCOL=8`, 4-party,
+labeled malicious-secure upstream) have landed behind this same interface —
+see `hpmpc_backend.md` for both protocols' derivations and verification
+narratives. Tetrad's 4-party masking structure couldn't be derived from the
+existing 3-party `Replicated3PCScheme`, so it also introduced a new
+`SecretSharingScheme` (`sharing_schemes/tetrad4pc.py`, `Tetrad4PCScheme`)
+that produces already-native-shaped payloads per party, plus two new
+per-party env overrides (`NUM_PARTIES`, `SHARING_SCHEME`) since Tetrad is
+the first protocol here that needs a party count/sharing scheme different
+from the checked-in config file's defaults. **Important:** real
+corruption-testing against a live Tetrad deployment found its
+malicious-abort detection does not fire for this integration's actual
+usage — see `hpmpc_backend.md`'s "Malicious-security caveat, found
+empirically" and `threat_model.md`'s adversary model before relying on
+Tetrad for anything beyond semi-honest security. Also added as part of this
+work: a `local_training_disabled` client debug flag (see
+`rollout_guide.md`) for fast iteration on the aggregation path without
+paying real training cost, and an `hpmpc_backend.py` `log_stdout` option for
+capturing hpmpc's own per-round timing/communication output (used by the
+secure-aggregation overhead report, `overhead_report.md`, once it exists).
+
 ## Problem
 
 Flotilla today has exactly one central aggregation server
