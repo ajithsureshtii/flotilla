@@ -31,6 +31,14 @@ general_config:
 secure_aggregation:
   enabled: <True/False>
   sharing_scheme: replicated3pc
+  # "client_side" (default): pre-weight the update by this client's own
+  # dataset size before sharing. "mpc_product": share the RAW update
+  # instead -- the party cluster computes weight*dataset_size itself via
+  # secret x secret multiplication. Must match every party's
+  # backend.hpmpc.weighting_mode -- see
+  # docs/secure_aggregation/mult_fedavg.md. Currently "mpc_product" is only
+  # supported when every party is configured with protocol: 5 (Trio).
+  weighting_mode: client_side
   fixed_point:
     bitlength: 64
     frac_bits: 13

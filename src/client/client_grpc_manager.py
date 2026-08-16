@@ -252,6 +252,9 @@ class ClientGRPCManager(grpc_pb2_grpc.EdgeServiceServicer):
                     "submission_timeout_s", 30
                 ),
                 logger=self.logger,
+                weighting_mode=self.secure_aggregation_config.get(
+                    "weighting_mode", "client_side"
+                ),
             )
             response = grpc_pb2.InitTrainResponse(
                 model_id=model_id,

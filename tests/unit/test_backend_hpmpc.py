@@ -8,11 +8,13 @@ import pytest
 
 from server.secure_agg.backends.backend_hpmpc import (
     HpmpcBackend,
+    _own_fragment,
     _to_hpmpc_tetrad,
     _to_hpmpc_trio,
     _to_hpmpc_xa,
 )
 from server.secure_agg.backends.base import PartyEndpoint, TensorSpec
+from server.secure_agg.constants import DATASET_SIZE_LAYER_NAME
 from server.secure_agg.fixed_point_codec import FixedPointCodec
 from server.secure_agg.sharing_schemes.replicated3pc import Replicated3PCScheme
 from server.secure_agg.sharing_schemes.tetrad4pc import Tetrad4PCScheme
@@ -711,3 +713,199 @@ async def test_run_aggregation_round_raises_timeout_error_and_kills_process(tmp_
             )
 
     assert killed["called"]
+
+
+# --- weighting_mode="mpc_product" (mult_fedavg) ---------------------------
+
+
+def _write_mult_metadata(executable_dir, bitlength=64, frac_bits=13, protocol=5, num_parties=3):
+    executable_dir.mkdir(parents=True, exist_ok=True)
+    (executable_dir / "mult_fedavg_secure_aggregation.build_metadata.json").write_text(
+        json.dumps(
+            {
+                "bitlength": bitlength,
+                "frac_bits": frac_bits,
+                "protocol": protocol,
+                "function_identifier": 91,
+            }
+        )
+    )
+    for party in range(num_parties):
+        (executable_dir / f"run-P{party}.o").touch()
+
+
+def _make_mult_backend(tmp_path, party_index=0, bitlength=64, frac_bits=13):
+    executable_dir = tmp_path / "executables"
+    _write_mult_metadata(executable_dir, bitlength=bitlength, frac_bits=frac_bits)
+    return HpmpcBackend(
+        party_index=party_index,
+        num_parties=3,
+        codec=FixedPointCodec(bitlength=bitlength, frac_bits=frac_bits),
+        protocol=5,
+        executable_dir=str(executable_dir),
+        tmp_dir=str(tmp_path / "tmp"),
+        weighting_mode="mpc_product",
+    )
+
+
+def test_rejects_unsupported_weighting_mode(tmp_path):
+    with pytest.raises(ValueError, match="does not support weighting_mode"):
+        HpmpcBackend(
+            party_index=0,
+            num_parties=3,
+            codec=FixedPointCodec(bitlength=64, frac_bits=13),
+            protocol=2,
+            executable_dir=str(tmp_path),
+            tmp_dir=str(tmp_path / "tmp"),
+            weighting_mode="bogus",
+        )
+
+
+@pytest.mark.parametrize("protocol,num_parties", [(2, 3), (8, 4)])
+def test_mpc_product_weighting_mode_requires_trio(tmp_path, protocol, num_parties):
+    with pytest.raises(ValueError, match="only supported for protocol=5"):
+        HpmpcBackend(
+            party_index=0,
+            num_parties=num_parties,
+            codec=FixedPointCodec(bitlength=64, frac_bits=13),
+            protocol=protocol,
+            executable_dir=str(tmp_path),
+            tmp_dir=str(tmp_path / "tmp"),
+            weighting_mode="mpc_product",
+        )
+
+
+def test_start_raises_on_function_identifier_mismatch(tmp_path):
+    # A party configured for weighting_mode="mpc_product" (expects
+    # FUNCTION_IDENTIFIER=91) but pointed at a
+    # mult_fedavg_secure_aggregation.build_metadata.json that was
+    # (mistakenly) written with the default fedavg program's
+    # FUNCTION_IDENTIFIER=90 must fail loudly at start(), not with a
+    # confusing file-format mismatch mid-round.
+    executable_dir = tmp_path / "executables"
+    executable_dir.mkdir(parents=True)
+    (executable_dir / "mult_fedavg_secure_aggregation.build_metadata.json").write_text(
+        json.dumps({"bitlength": 64, "frac_bits": 13, "protocol": 5, "function_identifier": 90})
+    )
+    for party in range(3):
+        (executable_dir / f"run-P{party}.o").touch()
+    backend = HpmpcBackend(
+        party_index=0,
+        num_parties=3,
+        codec=FixedPointCodec(bitlength=64, frac_bits=13),
+        protocol=5,
+        executable_dir=str(executable_dir),
+        tmp_dir=str(tmp_path / "tmp"),
+        weighting_mode="mpc_product",
+    )
+    with pytest.raises(RuntimeError, match="weighting_mode config mismatch"):
+        asyncio.run(backend.start([]))
+
+
+def test_own_fragment_extracts_first_field_only():
+    c_j = np.array([3, 100], dtype=np.uint64)
+    c_j1 = np.array([999, 999], dtype=np.uint64)  # must be ignored
+    result = _own_fragment((c_j, c_j1), RING_MASK)
+    assert result.tolist() == [3, 100]
+
+
+@pytest.mark.asyncio
+async def test_run_mpc_product_round_writes_per_client_fragments_and_decodes_product(tmp_path):
+    # End-to-end (mocked subprocess) check of the mpc_product file format:
+    # 2 clients, one real weight layer + the dataset-size pseudo-layer, RAW
+    # (unweighted) values. The fake subprocess reads back party 0's own
+    # fragments, asserts they match _own_fragment's extraction directly from
+    # the SAME Replicated3PCScheme shares, then writes back a "revealed"
+    # output computed independently in plaintext (sum of weight_i *
+    # dataset_size_i, encoded at 2x frac_bits -- see
+    # mult_fedavg_secure_aggregation.hpp's module docstring for why) so this
+    # test also exercises HpmpcBackend's own decode-at-double-scale logic.
+    backend = _make_mult_backend(tmp_path, party_index=0)
+    await backend.start([])
+
+    codec = FixedPointCodec(bitlength=64, frac_bits=13)
+    scheme = Replicated3PCScheme(bitlength=64)
+    rng = np.random.default_rng(3)
+
+    clients = {
+        "client1": {"weights": np.array([1.5, -2.0]), "dataset_size": 100.0},
+        "client2": {"weights": np.array([3.0, 4.0]), "dataset_size": 50.0},
+    }
+    shares = {}
+    expected_party0_weight_fragments = {}
+    expected_party0_ds_fragment = {}
+    for client_id, data in clients.items():
+        w_fp = codec.encode(data["weights"])
+        ds_fp = codec.encode(np.array([data["dataset_size"]]))
+        w_shares = {s.party_index: s for s in scheme.share(w_fp, rng)}
+        ds_shares = {s.party_index: s for s in scheme.share(ds_fp, rng)}
+        shares[client_id] = {
+            "w": w_shares[0],
+            DATASET_SIZE_LAYER_NAME: ds_shares[0],
+        }
+        expected_party0_weight_fragments[client_id] = _own_fragment(w_shares[0].payload, RING_MASK)
+        expected_party0_ds_fragment[client_id] = _own_fragment(ds_shares[0].payload, RING_MASK)
+
+    tensor_specs = {
+        "w": TensorSpec(layer_name="w", shape=(2,), dtype="float32"),
+        DATASET_SIZE_LAYER_NAME: TensorSpec(layer_name=DATASET_SIZE_LAYER_NAME, shape=(1,), dtype="float64"),
+    }
+
+    expected_raw_product = np.zeros(2, dtype=np.int64)
+    expected_total_ds_fp = 0
+    for data in clients.values():
+        w_fp = codec.encode(data["weights"]).astype(np.int64)
+        ds_fp = int(codec.encode(np.array([data["dataset_size"]]))[0])
+        expected_raw_product += w_fp * ds_fp
+        expected_total_ds_fp += ds_fp
+
+    captured = {}
+
+    class _FakeProcess:
+        returncode = 0
+
+        async def communicate(self):
+            return b"", b""
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        env = kwargs["env"]
+        with open(env["SECURE_AGG_INPUT_FILE"], "rb") as f:
+            (num_clients,) = struct.unpack("<I", f.read(4))
+            (elements_per_client,) = struct.unpack("<I", f.read(4))
+            captured["num_clients"] = num_clients
+            captured["elements_per_client"] = elements_per_client
+            rows = {}
+            for client_id in sorted(clients.keys()):
+                weight_fragment = struct.unpack(f"<{elements_per_client}Q", f.read(8 * elements_per_client))
+                (ds_fragment,) = struct.unpack("<Q", f.read(8))
+                rows[client_id] = (weight_fragment, ds_fragment)
+        captured["rows"] = rows
+
+        with open(env["SECURE_AGG_OUTPUT_FILE"], "wb") as f:
+            f.write(struct.pack("<I", elements_per_client))
+            f.write(
+                struct.pack(
+                    f"<{elements_per_client}Q",
+                    *(int(v) & 0xFFFFFFFFFFFFFFFF for v in expected_raw_product.tolist()),
+                )
+            )
+            f.write(struct.pack("<Q", expected_total_ds_fp & 0xFFFFFFFFFFFFFFFF))
+        return _FakeProcess()
+
+    with patch("asyncio.create_subprocess_exec", side_effect=fake_create_subprocess_exec):
+        result = await backend.run_aggregation_round(
+            round_id="session1:0", shares=shares, tensor_specs=tensor_specs, timeout_s=5
+        )
+
+    assert captured["num_clients"] == 2
+    assert captured["elements_per_client"] == 2
+    for client_id, (weight_fragment, ds_fragment) in captured["rows"].items():
+        assert list(weight_fragment) == expected_party0_weight_fragments[client_id].tolist()
+        assert ds_fragment == int(expected_party0_ds_fragment[client_id][0])
+
+    assert set(result.keys()) == {"w", DATASET_SIZE_LAYER_NAME}
+    expected_product_plaintext = expected_raw_product.astype(np.float64) / float(1 << (2 * 13))
+    assert np.allclose(result["w"].numpy(), expected_product_plaintext, atol=1e-3)
+    assert result[DATASET_SIZE_LAYER_NAME].item() == pytest.approx(150.0)
+    # input/output files get cleaned up after a successful round
+    assert not tmp_path.joinpath("tmp").exists() or not any(tmp_path.joinpath("tmp").iterdir())

@@ -94,6 +94,7 @@ def test_construct_backend_hpmpc_uses_executable_dir_and_tmp_dir():
         "executable_dir": "/opt/hpmpc/executables",
         "tmp_dir": "/tmp/secure_agg",
         "log_stdout": False,
+        "weighting_mode": "client_side",
     }
     # hpmpc doesn't manage its own bind_host/bind_port -- must not be passed
     assert "bind_host" not in backend.kwargs

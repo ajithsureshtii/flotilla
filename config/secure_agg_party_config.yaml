@@ -4,7 +4,7 @@
 # legitimately differ per party (or per protocol) can also be set via env
 # vars (PARTY_INDEX, NUM_PARTIES, BIND_PORT, BACKEND_PORT, PEERS_JSON as a
 # JSON string, SHARING_SCHEME, BACKEND_TYPE, HPMPC_PROTOCOL,
-# HPMPC_EXECUTABLE_DIR) so the SAME checked-in file can be reused across all
+# HPMPC_EXECUTABLE_DIR, HPMPC_WEIGHTING_MODE) so the SAME checked-in file can be reused across all
 # party containers -- see docker/docker-compose.yaml and
 # flo_secure_agg_party.py's _apply_env_overrides. NUM_PARTIES/SHARING_SCHEME
 # only need overriding for Tetrad (num_parties: 4, sharing_scheme:
@@ -45,6 +45,13 @@ backend:
                          # timing/communication stdout via FedLogger. Off by
                          # default (log spam in normal deployments) -- see
                          # docs/secure_aggregation/hpmpc_backend.md.
+    weighting_mode: client_side  # client_side (default) | mpc_product -- see
+                         # docs/secure_aggregation/mult_fedavg.md. Must match
+                         # every client's secure_aggregation.weighting_mode
+                         # and every OTHER party's setting here. mpc_product
+                         # currently requires protocol: 5 (Trio) and executables
+                         # built for FUNCTION_IDENTIFIER=91 (see
+                         # hpmpc/scripts/build_secure_agg.sh).
 
 state:
   state_location: inmemory

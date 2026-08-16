@@ -518,6 +518,11 @@ full framing and the residual-risk entry this replaces.
   integration** — see "Malicious-security caveat, found empirically" above.
   Treat it as semi-honest-only until resolved.
 
+See also [`mult_fedavg.md`](mult_fedavg.md) for a separate aggregation
+variant (`weighting_mode="mpc_product"`, Trio only) built on top of this
+backend, where the party cluster computes `weight_i * dataset_size_i`
+itself via genuine secret × secret multiplication.
+
 ## How this was verified
 
 No real hpmpc build could run on the development host directly (see

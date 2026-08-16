@@ -34,7 +34,7 @@ def _fake_stub_capturing(captured):
     return _FakeStub
 
 
-def _share_and_submit(dataset_size, captured):
+def _share_and_submit(dataset_size, captured, weighting_mode="client_side"):
     state_dict = {"w": torch.tensor([1.0, 2.0], dtype=torch.float32)}
     with patch("grpc.insecure_channel", return_value=MagicMock(close=lambda: None)):
         with patch(
@@ -51,6 +51,7 @@ def _share_and_submit(dataset_size, captured):
                 fixed_point_config={"bitlength": 64, "frac_bits": 13},
                 party_endpoints=PARTY_ENDPOINTS,
                 submission_timeout_s=5,
+                weighting_mode=weighting_mode,
             )
 
 
@@ -115,3 +116,33 @@ def test_share_and_submit_real_layers_are_still_pre_weighted_by_dataset_size():
 
     # state_dict["w"] == [1.0, 2.0], dataset_size == 10 -> pre-weighted == [10.0, 20.0]
     assert decoded.tolist() == pytest.approx([10.0, 20.0], abs=1e-3)
+
+
+def test_share_and_submit_mpc_product_mode_does_not_pre_weight_real_layers():
+    # weighting_mode="mpc_product": the party cluster computes
+    # weight_i*dataset_size_i itself (see mult_fedavg_secure_aggregation.hpp
+    # and backend_hpmpc.py's _run_mpc_product_round), so the client must
+    # share the RAW update, unlike the default "client_side" mode.
+    captured = []
+    _share_and_submit(dataset_size=10, captured=captured, weighting_mode="mpc_product")
+
+    codec = FixedPointCodec(bitlength=64, frac_bits=13)
+    scheme = Replicated3PCScheme(bitlength=64)
+
+    shares_by_party = {}
+    for party_index, request in enumerate(captured):
+        w_share = next(s for s in request.shares if s.layer_name == "w")
+        shares_by_party[party_index] = PartyShare(
+            party_index=party_index, payload=pickle.loads(w_share.share_payload)
+        )
+
+    reconstructed = scheme.reconstruct(shares_by_party)
+    decoded = codec.decode(reconstructed)
+
+    # state_dict["w"] == [1.0, 2.0], RAW (not pre-weighted by dataset_size=10)
+    assert decoded.tolist() == pytest.approx([1.0, 2.0], abs=1e-3)
+
+
+def test_share_and_submit_rejects_unsupported_weighting_mode():
+    with pytest.raises(ValueError, match="does not support weighting_mode"):
+        _share_and_submit(dataset_size=10, captured=[], weighting_mode="bogus")

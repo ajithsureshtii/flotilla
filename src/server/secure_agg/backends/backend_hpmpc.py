@@ -48,8 +48,40 @@ import numpy as np
 import torch
 
 from server.secure_agg.backends.base import SecureAggregationBackend
+from server.secure_agg.constants import DATASET_SIZE_LAYER_NAME
 from server.secure_agg.fixed_point_codec import FixedPointCodec
 from utils.logger import FedLogger
+
+# weighting_mode -> (build-metadata filename, hpmpc FUNCTION_IDENTIFIER,
+# whether this mode needs Trio's per-client native-input+multiply path
+# instead of the original presummed-reveal-only path). "client_side" is the
+# original, still-default behavior (client pre-weights by its own dataset
+# size -- see client_secure_agg_manager.py -- so this backend only ever
+# sums already-weighted shares and reveals). "mpc_product" is the new
+# variant (see mult_fedavg_secure_aggregation.hpp): the client shares its
+# RAW update and RAW dataset size separately, and the party cluster itself
+# computes weight_i * dataset_size_i via genuine secret x secret
+# multiplication before summing across clients -- Trio (PROTOCOL=5) only,
+# see that file's module docstring for why.
+_WEIGHTING_MODE_METADATA = {
+    "client_side": ("fedavg_secure_aggregation.build_metadata.json", 90),
+    "mpc_product": ("mult_fedavg_secure_aggregation.build_metadata.json", 91),
+}
+
+
+def _own_fragment(payload, mask: np.uint64) -> np.ndarray:
+    """Extracts just this party's raw replicated3pc share fragment (c_j --
+    the first field of a replicated3pc.py PartyShare payload), with NO
+    protocol-specific re-derivation (contrast _to_hpmpc_trio, which derives
+    a raw Trio (p1, p2) pair for the OLD presummed-reveal-only path). Used
+    ONLY by the "mpc_product" weighting-mode round (see
+    mult_fedavg_secure_aggregation.hpp's module docstring for why this
+    simpler extraction is correct there): each party inputs this raw
+    fragment directly into hpmpc's own prepare_receive_from<P_j> mechanism,
+    so no per-protocol share-shape conversion is needed or wanted here --
+    doing one would just be undone by that native-input step."""
+    c_j, _c_j1 = payload
+    return np.asarray(c_j).reshape(-1).astype(np.uint64) & mask
 
 
 def _to_hpmpc_xa(c_j: np.ndarray, c_j1: np.ndarray, mask: np.uint64):
@@ -212,6 +244,7 @@ class HpmpcBackend(SecureAggregationBackend):
         tmp_dir: str,
         run_timeout_margin_s: float = 10.0,
         log_stdout: bool = False,
+        weighting_mode: str = "client_side",
     ):
         if protocol not in _EXPECTED_NUM_PARTIES:
             raise ValueError(
@@ -224,11 +257,23 @@ class HpmpcBackend(SecureAggregationBackend):
                 f"backend_hpmpc protocol={protocol} requires exactly "
                 f"{expected_num_parties} parties, got num_parties={num_parties}"
             )
+        if weighting_mode not in _WEIGHTING_MODE_METADATA:
+            raise ValueError(
+                f"backend_hpmpc does not support weighting_mode={weighting_mode!r} "
+                f"(supported: {sorted(_WEIGHTING_MODE_METADATA)})"
+            )
+        if weighting_mode == "mpc_product" and protocol != 5:
+            raise ValueError(
+                "backend_hpmpc weighting_mode='mpc_product' is currently only supported for "
+                "protocol=5 (Trio) -- see mult_fedavg_secure_aggregation.hpp's module docstring "
+                "for why Replicated/Tetrad aren't wired in yet"
+            )
         self.backend_id = "hpmpc"
         self.party_index = party_index
         self.num_parties = num_parties
         self._codec = codec
         self._protocol = protocol
+        self._weighting_mode = weighting_mode
         self._strategy = _STRATEGY_FACTORY[protocol](party_index)
         self._ring_mask = np.uint64((1 << codec.bitlength) - 1)
         self._executable_dir = Path(executable_dir)
@@ -243,17 +288,26 @@ class HpmpcBackend(SecureAggregationBackend):
         return self._executable_dir / f"run-P{self.party_index}.o"
 
     def _metadata_path(self) -> Path:
-        return self._executable_dir / "fedavg_secure_aggregation.build_metadata.json"
+        metadata_filename, _function_identifier = _WEIGHTING_MODE_METADATA[self._weighting_mode]
+        return self._executable_dir / metadata_filename
 
     def _check_config_consistency(self):
         """Fails fast, at start(), rather than mid-round, if this party's
-        configured protocol/fixed-point parameters don't match what the
+        configured protocol/fixed-point/weighting_mode don't match what the
         compiled executable was actually built with. See hpmpc_backend.md's
         "config-mismatch hazard" — protocol/bitlength/frac_bits live in two
         places (this party's YAML config, and hpmpc's compile-time
         PROTOCOL/BITLENGTH/FRACTIONAL macros) with no automatic way to keep
         them in sync; build_secure_agg.sh writes the metadata file this
-        checks against."""
+        checks against. function_identifier is checked too -- since
+        weighting_mode='mpc_product' needs a DIFFERENT compiled program
+        (mult_fedavg_secure_aggregation.hpp, FUNCTION_IDENTIFIER=91) than the
+        default (fedavg_secure_aggregation.hpp, FUNCTION_IDENTIFIER=90),
+        pointing a 'mpc_product'-configured party at the wrong executable_dir
+        would otherwise only be caught by a confusing runtime file-format
+        mismatch (this backend would write the mult-fedavg per-client file
+        layout, but the fedavg binary would try to parse it as one
+        pre-summed row)."""
         metadata_path = self._metadata_path()
         if not metadata_path.exists():
             raise RuntimeError(
@@ -269,6 +323,17 @@ class HpmpcBackend(SecureAggregationBackend):
                 "Point this party's backend.hpmpc.executable_dir at the correctly-compiled "
                 "executables, or rebuild them for the configured protocol via "
                 "hpmpc/scripts/build_secure_agg.sh."
+            )
+        expected_function_identifier = _WEIGHTING_MODE_METADATA[self._weighting_mode][1]
+        if metadata.get("function_identifier") != expected_function_identifier:
+            raise RuntimeError(
+                f"weighting_mode config mismatch: this party is configured for "
+                f"weighting_mode={self._weighting_mode!r} (expects FUNCTION_IDENTIFIER="
+                f"{expected_function_identifier}), but the compiled executables at "
+                f"{self._executable_dir} were built with FUNCTION_IDENTIFIER="
+                f"{metadata.get('function_identifier')}. Point this party's "
+                "backend.hpmpc.executable_dir at the correctly-compiled executables, or rebuild "
+                "them for the configured weighting_mode via hpmpc/scripts/build_secure_agg.sh."
             )
         if metadata.get("bitlength") != self._codec.bitlength or metadata.get("frac_bits") != self._codec.frac_bits:
             raise RuntimeError(
@@ -290,38 +355,15 @@ class HpmpcBackend(SecureAggregationBackend):
         self._peer_endpoints = sorted(peer_endpoints, key=lambda p: p.party_index)
 
     async def run_aggregation_round(self, round_id, shares, tensor_specs, timeout_s):
-        layer_names = sorted(tensor_specs.keys())
-        safe_round_id = round_id.replace(":", "_").replace("/", "_")
-        input_path = self._tmp_dir / f"input_{safe_round_id}.bin"
-        output_path = self._tmp_dir / f"output_{safe_round_id}.bin"
+        if self._weighting_mode == "mpc_product":
+            return await self._run_mpc_product_round(round_id, shares, tensor_specs, timeout_s)
+        return await self._run_client_side_round(round_id, shares, tensor_specs, timeout_s)
 
-        num_fields = len(self._strategy.field_names)
-        flat_field_parts = [[] for _ in range(num_fields)]
-        for layer_name in layer_names:
-            spec = tensor_specs[layer_name]
-            num_elements = int(np.prod(spec.shape)) if spec.shape else 1
-            sums = [np.zeros(num_elements, dtype=np.uint64) for _ in range(num_fields)]
-            for client_shares in shares.values():
-                fields = self._strategy.convert(
-                    client_shares[layer_name].payload, self._ring_mask
-                )
-                for i, value in enumerate(fields):
-                    sums[i] = (sums[i] + value) & self._ring_mask
-            for i in range(num_fields):
-                flat_field_parts[i].append(sums[i])
-
-        flat_fields = [
-            np.concatenate(parts) if parts else np.array([], dtype=np.uint64)
-            for parts in flat_field_parts
-        ]
-        num_total_elements = len(flat_fields[0]) if flat_fields else 0
-
-        row_format = "<" + "Q" * num_fields
-        with open(input_path, "wb") as f:
-            f.write(struct.pack("<I", num_total_elements))
-            for row in zip(*(arr.tolist() for arr in flat_fields)):
-                f.write(struct.pack(row_format, *row))
-
+    async def _invoke_executable(self, round_id, input_path, output_path, timeout_s):
+        """Shared subprocess-invocation plumbing for both weighting modes --
+        peer sorting, hostname resolution, timeout/error handling are
+        identical regardless of which program/file-format is in play; only
+        the file contents differ (see the two round methods below)."""
         # hpmpc's own C++ socket layer (core/networking/socket.hpp) parses
         # its peer-IP CLI args as literal dotted-quad addresses -- it has no
         # DNS resolution of its own, so a Docker Compose service name like
@@ -372,6 +414,47 @@ class HpmpcBackend(SecureAggregationBackend):
                 f"{round_id},{stdout.decode(errors='replace') if stdout else ''}",
             )
 
+    async def _run_client_side_round(self, round_id, shares, tensor_specs, timeout_s):
+        """Original, still-default path: clients already pre-weighted their
+        update by their own dataset size (see client_secure_agg_manager.py),
+        so this backend only ever needs to SUM already-weighted shares
+        across clients (in Python, before ever invoking the binary -- see
+        this module's docstring for why) and reveal that one sum. Talks to
+        fedavg_secure_aggregation.hpp."""
+        layer_names = sorted(tensor_specs.keys())
+        safe_round_id = round_id.replace(":", "_").replace("/", "_")
+        input_path = self._tmp_dir / f"input_{safe_round_id}.bin"
+        output_path = self._tmp_dir / f"output_{safe_round_id}.bin"
+
+        num_fields = len(self._strategy.field_names)
+        flat_field_parts = [[] for _ in range(num_fields)]
+        for layer_name in layer_names:
+            spec = tensor_specs[layer_name]
+            num_elements = int(np.prod(spec.shape)) if spec.shape else 1
+            sums = [np.zeros(num_elements, dtype=np.uint64) for _ in range(num_fields)]
+            for client_shares in shares.values():
+                fields = self._strategy.convert(
+                    client_shares[layer_name].payload, self._ring_mask
+                )
+                for i, value in enumerate(fields):
+                    sums[i] = (sums[i] + value) & self._ring_mask
+            for i in range(num_fields):
+                flat_field_parts[i].append(sums[i])
+
+        flat_fields = [
+            np.concatenate(parts) if parts else np.array([], dtype=np.uint64)
+            for parts in flat_field_parts
+        ]
+        num_total_elements = len(flat_fields[0]) if flat_fields else 0
+
+        row_format = "<" + "Q" * num_fields
+        with open(input_path, "wb") as f:
+            f.write(struct.pack("<I", num_total_elements))
+            for row in zip(*(arr.tolist() for arr in flat_fields)):
+                f.write(struct.pack(row_format, *row))
+
+        await self._invoke_executable(round_id, input_path, output_path, timeout_s)
+
         with open(output_path, "rb") as f:
             (num_output_elements,) = struct.unpack("<I", f.read(4))
             raw_values = struct.unpack(f"<{num_output_elements}Q", f.read(8 * num_output_elements))
@@ -387,6 +470,78 @@ class HpmpcBackend(SecureAggregationBackend):
             layer_values = decoded[offset : offset + num_elements].reshape(spec.shape)
             result[layer_name] = torch.from_numpy(layer_values.astype(np.dtype(spec.dtype)))
             offset += num_elements
+
+        input_path.unlink(missing_ok=True)
+        output_path.unlink(missing_ok=True)
+        return result
+
+    async def _run_mpc_product_round(self, round_id, shares, tensor_specs, timeout_s):
+        """New path (weighting_mode='mpc_product'): clients share their RAW
+        update and RAW dataset size separately (no client-side pre-weighting
+        -- see client_secure_agg_manager.py's weighting_mode branch), so
+        weight_i * dataset_size_i must be computed HERE, inside the MPC
+        circuit, via genuine secret x secret multiplication, for every
+        client, before summing across clients -- Sum(w_i*d_i) != Sum(w_i) *
+        Sum(d_i), so presumming (like the client_side path does) would be
+        mathematically wrong here. Talks to
+        mult_fedavg_secure_aggregation.hpp; see that file's module docstring
+        for the on-disk file contract and why only this party's OWN raw
+        replicated3pc share fragment (not a protocol-specific re-derivation)
+        is written per client per element."""
+        layer_names = sorted(name for name in tensor_specs.keys() if name != DATASET_SIZE_LAYER_NAME)
+        client_ids = sorted(shares.keys())
+        safe_round_id = round_id.replace(":", "_").replace("/", "_")
+        input_path = self._tmp_dir / f"input_{safe_round_id}.bin"
+        output_path = self._tmp_dir / f"output_{safe_round_id}.bin"
+
+        elements_per_client = 0
+        for layer_name in layer_names:
+            spec = tensor_specs[layer_name]
+            elements_per_client += int(np.prod(spec.shape)) if spec.shape else 1
+
+        with open(input_path, "wb") as f:
+            f.write(struct.pack("<I", len(client_ids)))
+            f.write(struct.pack("<I", elements_per_client))
+            for client_id in client_ids:
+                client_shares = shares[client_id]
+                for layer_name in layer_names:
+                    fragment = _own_fragment(client_shares[layer_name].payload, self._ring_mask)
+                    f.write(struct.pack(f"<{len(fragment)}Q", *fragment.tolist()))
+                ds_fragment = _own_fragment(
+                    client_shares[DATASET_SIZE_LAYER_NAME].payload, self._ring_mask
+                )
+                f.write(struct.pack("<Q", int(ds_fragment[0])))
+
+        await self._invoke_executable(round_id, input_path, output_path, timeout_s)
+
+        with open(output_path, "rb") as f:
+            (num_output_elements,) = struct.unpack("<I", f.read(4))
+            raw_product = struct.unpack(f"<{num_output_elements}Q", f.read(8 * num_output_elements))
+            (raw_total_dataset_size,) = struct.unpack("<Q", f.read(8))
+
+        # The revealed product is UNTRUNCATED (see
+        # mult_fedavg_secure_aggregation.hpp's module docstring for why no
+        # in-MPC truncation is used): both operands were encoded at
+        # frac_bits, so their product carries 2*frac_bits of fractional
+        # precision -- decode with double the scale rather than going
+        # through self._codec.decode() (which assumes a single frac_bits).
+        product_array = np.array(raw_product, dtype=np.uint64).astype(np.int64)
+        decoded_product = product_array.astype(np.float64) / float(1 << (2 * self._codec.frac_bits))
+        total_dataset_size_signed = np.array([raw_total_dataset_size], dtype=np.uint64).astype(np.int64)
+        decoded_total_dataset_size = self._codec.decode(total_dataset_size_signed)[0]
+
+        result = OrderedDict()
+        offset = 0
+        for layer_name in layer_names:
+            spec = tensor_specs[layer_name]
+            num_elements = int(np.prod(spec.shape)) if spec.shape else 1
+            layer_values = decoded_product[offset : offset + num_elements].reshape(spec.shape)
+            result[layer_name] = torch.from_numpy(layer_values.astype(np.dtype(spec.dtype)))
+            offset += num_elements
+        ds_spec = tensor_specs[DATASET_SIZE_LAYER_NAME]
+        result[DATASET_SIZE_LAYER_NAME] = torch.from_numpy(
+            np.array([decoded_total_dataset_size]).astype(np.dtype(ds_spec.dtype)).reshape(ds_spec.shape)
+        )
 
         input_path.unlink(missing_ok=True)
         output_path.unlink(missing_ok=True)

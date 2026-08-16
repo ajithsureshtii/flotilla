@@ -33,6 +33,10 @@ general_config:
 secure_aggregation:
   enabled: False
   sharing_scheme: replicated3pc
+  # "client_side" (default) or "mpc_product" -- see
+  # docs/secure_aggregation/mult_fedavg.md. Must match every party's
+  # backend.hpmpc.weighting_mode.
+  weighting_mode: client_side
   fixed_point:
     bitlength: 64
     frac_bits: 13

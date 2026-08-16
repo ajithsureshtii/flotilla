@@ -41,6 +41,8 @@ def _apply_env_overrides(config: dict) -> dict:
         config["backend"]["hpmpc"]["protocol"] = int(os.environ["HPMPC_PROTOCOL"])
     if os.environ.get("HPMPC_EXECUTABLE_DIR") is not None:
         config["backend"]["hpmpc"]["executable_dir"] = os.environ["HPMPC_EXECUTABLE_DIR"]
+    if os.environ.get("HPMPC_WEIGHTING_MODE") is not None:
+        config["backend"]["hpmpc"]["weighting_mode"] = os.environ["HPMPC_WEIGHTING_MODE"]
     return config
 
 
@@ -77,6 +79,7 @@ def _construct_backend(backend_module, backend_type, backend_config, party_index
             executable_dir=per_backend_config["executable_dir"],
             tmp_dir=per_backend_config.get("tmp_dir", "/tmp/secure_agg"),
             log_stdout=per_backend_config.get("log_stdout", False),
+            weighting_mode=per_backend_config.get("weighting_mode", "client_side"),
         )
     raise ValueError(f"unknown backend type: {backend_type}")
 

@@ -261,3 +261,9 @@ pytest -m slow_hpmpc_build             # requires a real hpmpc build, opt-in (Ph
 | 3 | hpmpc backend adapter behind the same interface | Done |
 | 4 | Full rollout: client toggle, real e2e, threat model finalized | Done |
 | 5 (optional) | Genericity stress-test: a second, structurally different backend | Not started |
+
+See also [`mult_fedavg.md`](mult_fedavg.md): a second aggregation variant
+(`weighting_mode="mpc_product"`, Trio only) where the party cluster itself
+computes `weight_i * dataset_size_i` via genuine secret × secret
+multiplication, instead of clients pre-weighting before sharing — exercises
+real inter-party communication, unlike the reveal-only design above.
