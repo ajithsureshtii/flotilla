@@ -1,11 +1,27 @@
 # Secure Aggregation — Threat Model
 
-**Status: Finalized (Phase 4).** The claims below are concrete and verified,
-not aspirational: the data flow matches the real proto/topology (Phase 2),
-the hpmpc backend exists and was verified against real compiled binaries
-(Phase 3 — see `hpmpc_backend.md`), and the "no fault tolerance" residual
-risk below was confirmed with an actual fault-injection test
+**Status: Finalized (Phase 4), trust model revised post-Phase-4 (reveal
+removed from the compute parties).** The claims below are concrete and
+verified, not aspirational: the data flow matches the real proto/topology
+(Phase 2), the hpmpc backend exists and was verified against real compiled
+binaries (Phase 3 — see `hpmpc_backend.md`), and the "no fault tolerance"
+residual risk below was confirmed with an actual fault-injection test
 (`tests/integration/test_secure_mpc_fault_injection.py`), not just asserted.
+
+**Trust-model change (read this first if you read this doc before):**
+compute parties (`flo_secure_agg_party0/1/2[/3]`) no longer reveal the
+aggregate among themselves at all. Each party exports its own raw share of
+the (still-secret) result; `flo_server` collects every party's share and
+reconstructs the plaintext itself (`server/secure_agg/reconstruct.py`),
+using each protocol's own reveal formula reimplemented in pure Python. This
+is a **real, deliberate shift, not a strict strengthening with no
+trade-off**: no compute party, individually or in any collusion short of
+all of them, ever learns the plaintext aggregate anymore (previously, every
+party learned it symmetrically) — but `flo_server` is now the **one place
+plaintext is ever computed**, where before compromising it gained an
+attacker nothing beyond what compromising any single (already-untrusted)
+compute party already gave them. See "Adversary model" and "What is
+protected" below for the concrete, updated claims.
 
 ## Data flow (concrete as of Phase 2, dataset-size sharing added post-rollout — see `topology.md`, `proto_contract.md`)
 
@@ -31,19 +47,28 @@ flo_client            trains locally (unchanged) -> plaintext state_dict
                  +--- RunAggregationRound (triggered by flo_server, ------+
                       carries only client_ids -- no per-client weight)
                                      |
+                     each party computes and returns ONLY ITS OWN
+                     raw share of the result -- NO reveal happens
+                     between parties at any point (backend_hpmpc.py)
                                      v
                               flo_server (aggregator_secure_mpc.py)
-                     pops the revealed DATASET_SIZE_LAYER_NAME total, divides
-                     every other revealed layer by it (plaintext, post-hoc)
+                     collects every party's raw share, RECONSTRUCTS the
+                     plaintext itself (server/secure_agg/reconstruct.py --
+                     the ONLY place this ever happens), pops the
+                     reconstructed DATASET_SIZE_LAYER_NAME total, divides
+                     every other reconstructed layer by it (plaintext,
+                     post-hoc)
                        -> global_model (plaintext, same as today)
 ```
 
-`flo_server` sits only at the bottom of this diagram: it triggers rounds and
-receives the final plaintext aggregate (plus the round's total dataset
-size, used only as a division denominator and then discarded), exactly like
-`aggregate()` returns today for `fedavg`. It is never in the path a
-client's share — or dataset size — travels, and it does not send any
-per-client weight to the parties.
+`flo_server` sits only at the bottom of this diagram: it triggers rounds,
+collects every party's raw share, and is the only place the plaintext
+aggregate (and the round's total dataset size, used only as a division
+denominator and then discarded) is ever computed — exactly like
+`aggregate()` returns today for `fedavg`, except the reconstruction step
+that used to happen symmetrically across all compute parties now happens
+once, here. `flo_server` is never in the path a client's share — or dataset
+size — travels, and it does not send any per-client weight to the parties.
 
 ## Adversary model
 
@@ -78,22 +103,36 @@ per-client weight to the parties.
   Flotilla already has in the plaintext world (a client can already submit
   a garbage plaintext update today) and is not a new attack surface
   introduced by this work.
+- **`flo_server` is now the one place plaintext is ever computed** (see the
+  trust-model change note above). It was not previously a distinguished
+  trust boundary — every compute party already saw the same plaintext
+  symmetrically, so `flo_server` seeing it too added nothing new. That is
+  no longer true: a compromised `flo_server` now learns every round's
+  aggregate model and total dataset size, where a compromised single
+  compute party (short of enough of them colluding to reconstruct) learns
+  nothing on its own. `flo_server` was already trusted with the plaintext
+  final model in the `fedavg` path (see "What is NOT protected" below), so
+  this is not a new category of trust, but it is a concentration of it
+  compared to the pre-redesign symmetric-reveal design.
 
 ## What is protected
 
 - **A client's per-round local model update** (its trained `state_dict`)
-  is never seen in the clear by any single party server, `flo_server`, or
-  anyone observing the network — only secret shares of it travel from
-  client to each party, and only the final weighted aggregate is ever
-  revealed (to all 3 parties, then reported up to `flo_server`).
+  is never seen in the clear by any single party server, or anyone
+  observing the network — only secret shares of it travel from client to
+  each party. Unlike before the reveal-removal redesign, no party server
+  ever sees even the final weighted aggregate either — only `flo_server`
+  reconstructs it, from every party's raw share (see the trust-model change
+  note at the top of this document).
 - **A client's per-round dataset size, in `secure_mpc` sessions.** The
   client secret-shares its raw dataset size the same way it shares its
   model update (under the reserved `DATASET_SIZE_LAYER_NAME` pseudo-layer —
-  see `client_secure_agg_manager.py`), so no single party server or
-  `flo_server` ever learns an individual client's dataset size — only the
-  round's **total** across all checked-in clients is ever revealed, and
-  only because `aggregator_secure_mpc.py` needs it as the division
-  denominator (see `design.md`'s weighting discussion). Note this is
+  see `client_secure_agg_manager.py`), so no single party server ever
+  learns an individual client's dataset size, and (post-redesign) no party
+  server learns even the round's total anymore either — only `flo_server`
+  reconstructs that total, and only because `aggregator_secure_mpc.py`
+  needs it as the division denominator (see `design.md`'s weighting
+  discussion). Note this is
   `secure_mpc`-specific: a `fedavg` session still learns every client's
   dataset size in the clear via the same pre-existing `InitBench`/
   `StartTraining` RPCs it always has — this project doesn't touch that
@@ -113,10 +152,12 @@ per-client weight to the parties.
   strategies and logging exactly as today.
 - **Round participation** — which clients participated in which round is
   visible to `flo_server` and the party servers, unchanged from today.
-- **The resulting global model** — revealed in the clear to all 3 parties
-  and to `flo_server` at the end of every round, exactly as the plaintext
-  path does today (this is required for the training loop, server-side
-  validation, and checkpointing to keep working).
+- **The resulting global model** — revealed in the clear to `flo_server` at
+  the end of every round (this is required for the training loop,
+  server-side validation, and checkpointing to keep working) — but, post
+  reveal-removal redesign, no longer to any party server; see the
+  trust-model change note at the top of this document. `flo_server` seeing
+  the plaintext global model is unchanged from the plaintext `fedavg` path.
 - **Model architecture / hyperparameters** — plaintext, unchanged.
 - **The existing gRPC control-plane channels** (`flo_server` ↔ client,
   `flo_client` ↔ party for share submission, `flo_server` ↔ party for round
@@ -151,36 +192,45 @@ per-client weight to the parties.
   `round_id` field on `SubmitShare`/`RunAggregationRound` (Phase 2) guards
   against accidental cross-round mix-ups; it is not designed to resist an
   adversarial party replaying old shares.
-- **`verify_party_agreement`** (a config option that cross-checks every
-  configured party revealed an identical plaintext aggregate) is a
-  correctness/liveness sanity check for catching bugs during development,
-  not a malicious-security guarantee — a colluding or buggy majority can
-  still agree on a wrong answer, and a genuinely malicious party could
-  simply lie in its own gRPC response instead of returning an honest
-  (and disagreeing) value.
+- **`reconstruct.reconstruct`'s dual-formula cross-check** (the replacement
+  for the pre-redesign `verify_party_agreement` — see `runbook.md`) is a
+  correctness/liveness sanity check for catching bugs, not a
+  malicious-security guarantee — a genuinely malicious party could report a
+  raw share to `flo_server` that is internally consistent with the OTHER
+  parties' shares under both reconstruction formulas, yet still wrong,
+  without this check detecting it. Unlike the old `verify_party_agreement`
+  (which compared independently-revealed plaintexts across parties), this
+  check works entirely from the shares collected in one round, at
+  `flo_server` — it was NOT re-derived from an independent security
+  analysis of the new design, just adapted from the same "catch obvious
+  bugs/corruption" spirit as before.
 - **Tetrad's malicious-abort detection did not fire against real
-  corruption, in testing.** During Tetrad's real 4-container verification
-  (see `hpmpc_backend.md`'s "How this was verified"), two independent
-  experiments deliberately corrupted a value in one party's share that,
-  traced from `Tetrad-P_0_template.hpp`'s `complete_Reveal()`, is supposed
-  to be cross-checked against another party's redundant copy via hpmpc's
-  own `store_compare_view()`/`compare_views()` mechanism
+  corruption, in testing (pre-redesign; not yet re-verified post-redesign).**
+  During Tetrad's real 4-container verification (see `hpmpc_backend.md`'s
+  "How this was verified"), two independent experiments deliberately
+  corrupted a value in one party's share that, traced from
+  `Tetrad-P_0_template.hpp`'s `complete_Reveal()`, is supposed to be
+  cross-checked against another party's redundant copy via hpmpc's own
+  `store_compare_view()`/`compare_views()` mechanism
   (`live_protocol_base.hpp`). Neither corruption produced hpmpc's
   `"Compareviews failed!"` output or a nonzero process exit — every party
-  reported success, and only `verify_party_agreement` (see above, NOT a
-  security guarantee) caught the resulting disagreement, and only because
-  the corruption happened to be large enough to exceed its floating-point
-  comparison tolerance. The leading (unconfirmed) hypothesis is that
-  Tetrad's `PROTOCOL_INIT` buffer-sizing class is reused from a different
-  protocol family (`PROTOCOL=7`'s `OEC_MAL`, not a Tetrad-specific init
-  class — see `protocols/Protocols.h`), possibly miscounting the
-  `compare_views` buffer sizes for Tetrad's actual reveal-path calls and
-  silently disabling the cross-check. **Not independently root-caused** —
-  this is a genuine, unresolved, empirically-observed gap, not a
-  theoretical one, and supersedes the more abstract "does the BS26 attack
-  against compare-views also apply to Tetrad" question this entry
-  originally flagged: regardless of BS26's applicability, the mechanism was
-  observed not to fire at all for this integration's usage pattern.
-  Operationally: do not rely on Tetrad's malicious-security guarantee for
-  this integration until this is resolved — see the adversary-model note
-  above.
+  reported success, and only the (pre-redesign) `verify_party_agreement`
+  check (NOT a security guarantee) caught the resulting disagreement, and
+  only because the corruption happened to be large enough to exceed its
+  floating-point comparison tolerance. The leading (unconfirmed) hypothesis
+  is that Tetrad's `PROTOCOL_INIT` buffer-sizing class is reused from a
+  different protocol family (`PROTOCOL=7`'s `OEC_MAL`, not a
+  Tetrad-specific init class — see `protocols/Protocols.h`), possibly
+  miscounting the `compare_views` buffer sizes for Tetrad's actual
+  reveal-path calls and silently disabling the cross-check. **Not
+  independently root-caused** — this is a genuine, unresolved,
+  empirically-observed gap, not a theoretical one, and supersedes the more
+  abstract "does the BS26 attack against compare-views also apply to
+  Tetrad" question this entry originally flagged: regardless of BS26's
+  applicability, the mechanism was observed not to fire at all for this
+  integration's usage pattern. **Whether the NEW dual-formula cross-check
+  (see above) would catch the same corruption has not been tested** — see
+  `hpmpc_backend.md`'s "Update, post reveal-removal redesign" note for why
+  it might not, depending on which field was corrupted. Operationally: do
+  not rely on Tetrad's malicious-security guarantee for this integration
+  until this is resolved — see the adversary-model note above.

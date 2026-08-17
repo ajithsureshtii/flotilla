@@ -78,31 +78,34 @@ seems stuck with no progress:
    `hpmpc_backend.md`), or (b) the spawned executable itself failed/timed
    out — the exception message includes the executable's stdout/stderr.
 
-## `verify_party_agreement` mismatches
+## `reconstruct.reconstruct` cross-check failures
 
-`party_orchestrator_client.run_round`'s `verify_party_agreement=True`
-(default) cross-checks that every party revealed the identical plaintext
-before returning it, raising `RuntimeError: party disagreement on round ...`
-if not. This is a **correctness/liveness sanity check for catching bugs**,
-not a security mechanism (see `threat_model.md`) — if you see this in
-practice, treat it as a bug report, not routine noise:
+Compute parties no longer reveal an aggregate among themselves — each
+returns its own raw share, and flo_server reconstructs the plaintext itself
+via `server/secure_agg/reconstruct.py` (see `threat_model.md` for why).
+Since there is no shared plaintext across parties anymore for anyone to
+compare, the old `verify_party_agreement` cross-check (comparing every
+party's revealed value) has been replaced by a **dual-formula cross-check**
+inside `reconstruct()`: each protocol's reveal formula has two independent,
+equally valid forms (e.g. Trio's `P2.p1 - P0.p2` and `P1.p1 - P0.p1`),
+computed from the SAME shares already collected in one round — no extra
+network round-trip needed. A mismatch raises
+`RuntimeError: reconstruct() cross-check failed for protocol=... — the two
+independent reveal formulas disagree`. Treat this as a **bug report**, not
+routine noise (it is a correctness/liveness sanity check, not a security
+mechanism — see `threat_model.md`):
 
-- A **fixed-point rounding mismatch** shouldn't trigger this — the check
-  uses `torch.allclose(..., atol=1e-4)`, well above the
-  `2**-frac_bits`-scale rounding this scheme produces per Phase 1/2's
-  documented error bounds.
 - Most likely causes: a **config drift** between parties (different
   `fixed_point.bitlength`/`frac_bits`, or one party still running an old
-  hpmpc build after `fedavg_secure_aggregation.hpp` changed) — check
-  `executables/fedavg_secure_aggregation.build_metadata.json` matches
-  across all 3 party containers, or a **genuine bug** in a backend
-  implementation.
-- If it's operationally too strict for your setup (e.g. you've deliberately
-  deployed slightly different `frac_bits` per party for some reason — not
-  recommended), it can be disabled via
-  `aggregator_args.verify_party_agreement: False`, but this removes a real
-  bug-detection safety net with no compensating benefit — prefer fixing the
-  underlying config drift instead.
+  hpmpc build after `fedavg_secure_aggregation.hpp` or
+  `mult_fedavg_secure_aggregation.hpp` changed) — check
+  `executables/*.build_metadata.json` matches across all party containers,
+  or a **genuine bug** in a backend implementation.
+- If it's operationally too strict for your setup, the check can be
+  disabled by passing `cross_check=False` to `reconstruct.reconstruct` (not
+  exposed as an `aggregator_args` toggle today — this removes a real
+  bug-detection safety net with no compensating benefit, so prefer fixing
+  the underlying config drift instead).
 
 ## Rebuilding the hpmpc executables after a config change
 

@@ -16,13 +16,16 @@ session_config:
   aggregator_args:
     sharing_scheme: replicated3pc
     num_parties: 3
+    # Must match every party's backend.hpmpc.protocol -- flo_server needs
+    # this to know which reveal formula to reconstruct with (see
+    # server/secure_agg/reconstruct.py); 2 (Replicated) here, 5 for Trio.
+    protocol: 2
     party_endpoints:
       - {party_index: 0, host: secure_agg_party0, port: 50100}
       - {party_index: 1, host: secure_agg_party1, port: 50101}
       - {party_index: 2, host: secure_agg_party2, port: 50102}
     fixed_point: {bitlength: 64, frac_bits: 13}
     round_timeout_s: 120
-    verify_party_agreement: True
   client_selection: fedavg
   client_selection_args:
     client_fraction: 1

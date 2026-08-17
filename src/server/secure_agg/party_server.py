@@ -64,6 +64,17 @@ class SecureAggPartyServicer(secure_agg_pb2_grpc.SecureAggPartyServiceServicer):
         return secure_agg_pb2.SubmitShareAck(accepted=True, message="ok")
 
     def RunAggregationRound(self, request, context):
+        # Fully backend-agnostic: whatever self._backend.run_aggregation_round
+        # returns gets pickled and sent back as-is. Since the reveal-removal
+        # redesign (see backend_hpmpc.py's module docstring), that's this
+        # party's own RAW SHARE of the result (an OrderedDict[layer_name ->
+        # PartyShare]), never plaintext -- but this method doesn't need to
+        # know or care, same as before the redesign. tensor_specs (shape/
+        # dtype per layer) is bundled alongside it: flo_server needs this to
+        # reshape/cast the plaintext it reconstructs, but no longer has any
+        # other source for it now that this method returns a raw share
+        # instead of an already-shaped tensor -- identical across every
+        # party (same model), so any one party's copy suffices.
         buffered = self._share_state.get(f"{request.round_id}.shares") or {}
         missing = [c for c in request.client_ids if c not in buffered]
         if missing:
@@ -92,7 +103,8 @@ class SecureAggPartyServicer(secure_agg_pb2_grpc.SecureAggPartyServiceServicer):
 
         self.logger.info("fedparty.run_round.complete", request.round_id)
         return secure_agg_pb2.RunAggregationRoundResponse(
-            success=True, aggregated_model=pickle.dumps(aggregated)
+            success=True,
+            aggregated_model=pickle.dumps({"shares": aggregated, "tensor_specs": tensor_specs}),
         )
 
     def HealthCheck(self, request, context):

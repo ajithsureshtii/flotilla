@@ -28,11 +28,22 @@ sum, of two independently-shared values (it's specialized for combining a
 running share with a locally-derived delta, not for adding two unrelated
 secrets). Instead, this backend sums every selected client's share fields
 itself (plain add-mod-2**bitlength, local/free under each scheme's
-homomorphism) before ever invoking the compiled binary, which therefore only
-ever has to reveal a single, already-combined value per model-weight
-element. (Other protocols' operator+ has been verified to have no such
-pitfall — see hpmpc_backend.md — but shares are still pre-summed in Python
-for every protocol, for consistency with this one convention.)
+homomorphism) before ever invoking the compiled binary. (Other protocols'
+operator+ has been verified to have no such pitfall — see hpmpc_backend.md
+— but shares are still pre-summed in Python for every protocol, for
+consistency with this one convention.)
+
+IMPORTANT: neither round method reveals the aggregate among the compute
+parties anymore. Each returns this party's own RAW hpmpc share of the
+(still-secret) result, as an OrderedDict[layer_name -> PartyShare] — never
+a decoded plaintext tensor. flo_server (party_orchestrator_client.py /
+aggregator_secure_mpc.py) collects every party's raw share and reconstructs
+the plaintext itself via server/secure_agg/reconstruct.py. See
+fedavg_secure_aggregation.hpp's and mult_fedavg_secure_aggregation.hpp's
+module docstrings for why the reveal step was removed, and
+docs/secure_aggregation/threat_model.md for the resulting trust-model
+change (flo_server, not the compute-party cluster, is now the one place
+plaintext is ever computed).
 """
 
 import asyncio
@@ -45,11 +56,11 @@ from collections import OrderedDict
 from pathlib import Path
 
 import numpy as np
-import torch
 
 from server.secure_agg.backends.base import SecureAggregationBackend
 from server.secure_agg.constants import DATASET_SIZE_LAYER_NAME
 from server.secure_agg.fixed_point_codec import FixedPointCodec
+from server.secure_agg.sharing_schemes.base import PartyShare
 from utils.logger import FedLogger
 
 # weighting_mode -> (build-metadata filename, hpmpc FUNCTION_IDENTIFIER,
@@ -419,8 +430,10 @@ class HpmpcBackend(SecureAggregationBackend):
         update by their own dataset size (see client_secure_agg_manager.py),
         so this backend only ever needs to SUM already-weighted shares
         across clients (in Python, before ever invoking the binary -- see
-        this module's docstring for why) and reveal that one sum. Talks to
-        fedavg_secure_aggregation.hpp."""
+        this module's docstring for why). Talks to
+        fedavg_secure_aggregation.hpp, which no longer reveals -- it exports
+        this party's own raw share of the sum, in the SAME on-disk field
+        layout as the input (see that file's module docstring)."""
         layer_names = sorted(tensor_specs.keys())
         safe_round_id = round_id.replace(":", "_").replace("/", "_")
         input_path = self._tmp_dir / f"input_{safe_round_id}.bin"
@@ -455,20 +468,26 @@ class HpmpcBackend(SecureAggregationBackend):
 
         await self._invoke_executable(round_id, input_path, output_path, timeout_s)
 
+        # Output is this party's own raw share of the sum, in the SAME
+        # per-element field layout as the input (num_fields uint64s per
+        # element) -- no reveal, no decode here; see module docstring.
         with open(output_path, "rb") as f:
             (num_output_elements,) = struct.unpack("<I", f.read(4))
-            raw_values = struct.unpack(f"<{num_output_elements}Q", f.read(8 * num_output_elements))
-
-        raw_array = np.array(raw_values, dtype=np.uint64).astype(np.int64)
-        decoded = self._codec.decode(raw_array)
+            row_format = "<" + "Q" * num_fields
+            rows = [
+                struct.unpack(row_format, f.read(8 * num_fields)) for _ in range(num_output_elements)
+            ]
+        output_fields = [np.array(field, dtype=np.uint64) for field in zip(*rows)] if rows else [
+            np.array([], dtype=np.uint64) for _ in range(num_fields)
+        ]
 
         result = OrderedDict()
         offset = 0
         for layer_name in layer_names:
             spec = tensor_specs[layer_name]
             num_elements = int(np.prod(spec.shape)) if spec.shape else 1
-            layer_values = decoded[offset : offset + num_elements].reshape(spec.shape)
-            result[layer_name] = torch.from_numpy(layer_values.astype(np.dtype(spec.dtype)))
+            payload = tuple(field[offset : offset + num_elements] for field in output_fields)
+            result[layer_name] = PartyShare(party_index=self.party_index, payload=payload)
             offset += num_elements
 
         input_path.unlink(missing_ok=True)
@@ -487,7 +506,8 @@ class HpmpcBackend(SecureAggregationBackend):
         mult_fedavg_secure_aggregation.hpp; see that file's module docstring
         for the on-disk file contract and why only this party's OWN raw
         replicated3pc share fragment (not a protocol-specific re-derivation)
-        is written per client per element."""
+        is written per client per element. No reveal -- this party's own
+        raw Trio (p1, p2) share of the result is returned, not plaintext."""
         layer_names = sorted(name for name in tensor_specs.keys() if name != DATASET_SIZE_LAYER_NAME)
         client_ids = sorted(shares.keys())
         safe_round_id = round_id.replace(":", "_").replace("/", "_")
@@ -514,33 +534,32 @@ class HpmpcBackend(SecureAggregationBackend):
 
         await self._invoke_executable(round_id, input_path, output_path, timeout_s)
 
+        # Output is this party's own raw Trio (p1, p2) share of the summed
+        # product (elements_per_client rows) followed by one more (p1, p2)
+        # row for the summed dataset size -- no reveal, no decode here; see
+        # module docstring. The product share reconstructs to an
+        # UNTRUNCATED value (2*frac_bits fractional precision) once
+        # flo_server calls reconstruct() -- that decode step, and the
+        # dataset-size field's normal-frac_bits decode, both happen at
+        # flo_server, not here.
         with open(output_path, "rb") as f:
             (num_output_elements,) = struct.unpack("<I", f.read(4))
-            raw_product = struct.unpack(f"<{num_output_elements}Q", f.read(8 * num_output_elements))
-            (raw_total_dataset_size,) = struct.unpack("<Q", f.read(8))
-
-        # The revealed product is UNTRUNCATED (see
-        # mult_fedavg_secure_aggregation.hpp's module docstring for why no
-        # in-MPC truncation is used): both operands were encoded at
-        # frac_bits, so their product carries 2*frac_bits of fractional
-        # precision -- decode with double the scale rather than going
-        # through self._codec.decode() (which assumes a single frac_bits).
-        product_array = np.array(raw_product, dtype=np.uint64).astype(np.int64)
-        decoded_product = product_array.astype(np.float64) / float(1 << (2 * self._codec.frac_bits))
-        total_dataset_size_signed = np.array([raw_total_dataset_size], dtype=np.uint64).astype(np.int64)
-        decoded_total_dataset_size = self._codec.decode(total_dataset_size_signed)[0]
+            rows = [struct.unpack("<QQ", f.read(16)) for _ in range(num_output_elements)]
+            ds_p1, ds_p2 = struct.unpack("<QQ", f.read(16))
+        p1_field = np.array([row[0] for row in rows], dtype=np.uint64)
+        p2_field = np.array([row[1] for row in rows], dtype=np.uint64)
 
         result = OrderedDict()
         offset = 0
         for layer_name in layer_names:
             spec = tensor_specs[layer_name]
             num_elements = int(np.prod(spec.shape)) if spec.shape else 1
-            layer_values = decoded_product[offset : offset + num_elements].reshape(spec.shape)
-            result[layer_name] = torch.from_numpy(layer_values.astype(np.dtype(spec.dtype)))
+            payload = (p1_field[offset : offset + num_elements], p2_field[offset : offset + num_elements])
+            result[layer_name] = PartyShare(party_index=self.party_index, payload=payload)
             offset += num_elements
-        ds_spec = tensor_specs[DATASET_SIZE_LAYER_NAME]
-        result[DATASET_SIZE_LAYER_NAME] = torch.from_numpy(
-            np.array([decoded_total_dataset_size]).astype(np.dtype(ds_spec.dtype)).reshape(ds_spec.shape)
+        result[DATASET_SIZE_LAYER_NAME] = PartyShare(
+            party_index=self.party_index,
+            payload=(np.array([ds_p1], dtype=np.uint64), np.array([ds_p2], dtype=np.uint64)),
         )
 
         input_path.unlink(missing_ok=True)

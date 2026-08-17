@@ -111,13 +111,21 @@ def test_one_real_round_through_the_containerized_cluster(party_cluster):
         submission_timeout_s=10,
     )
 
-    raw_sum = run_round(
+    # run_round now returns (shares_by_party, tensor_specs) -- the
+    # simulator backend still reveals internally (unchanged, out of scope
+    # for the hpmpc reveal-removal redesign -- see backend_simulator.py's
+    # module docstring), so every party's own returned value is already
+    # the same final plaintext; take any one of them, matching
+    # aggregator_secure_mpc.py's own fallback for backends with no
+    # "protocol" configured.
+    shares_by_party, _tensor_specs = run_round(
         session_id=session_id,
         round_id=round_id,
         client_ids=["e2e-client"],
         party_endpoints=PARTY_ENDPOINTS,
         timeout_s=15,
     )
+    raw_sum = next(iter(shares_by_party.values()))
 
     expected = state_dict["w"].numpy() * dataset_size
     assert np.allclose(raw_sum["w"].numpy(), expected, atol=1e-2)

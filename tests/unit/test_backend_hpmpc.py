@@ -400,7 +400,12 @@ async def test_run_aggregation_round_resolves_peer_hostnames_to_ip_addresses(tmp
 
 
 @pytest.mark.asyncio
-async def test_run_aggregation_round_writes_correct_input_file_and_decodes_output(tmp_path):
+async def test_run_aggregation_round_writes_correct_input_file_and_returns_raw_share(tmp_path):
+    # No reveal anymore (see backend_hpmpc.py's module docstring): the fake
+    # binary just echoes back whatever (x, a) row it read (a single-client
+    # round changes nothing, since summing one share is the identity), and
+    # this test checks that echoed row survives round-tripping through
+    # run_aggregation_round as a PartyShare, unmodified.
     backend = _make_backend(tmp_path)
     await backend.start([])
 
@@ -414,7 +419,8 @@ async def test_run_aggregation_round_writes_correct_input_file_and_decodes_outpu
     shares = {"client1": {"w": party_shares[0]}}
     tensor_specs = {"w": TensorSpec(layer_name="w", shape=(2,), dtype="float32")}
 
-    written_input_path = {}
+    c_j, c_j1 = party_shares[0].payload
+    expected_x, expected_a = _to_hpmpc_xa(np.asarray(c_j).reshape(-1), np.asarray(c_j1).reshape(-1), RING_MASK)
 
     class _FakeProcess:
         returncode = 0
@@ -424,26 +430,13 @@ async def test_run_aggregation_round_writes_correct_input_file_and_decodes_outpu
 
     async def fake_create_subprocess_exec(*args, **kwargs):
         env = kwargs["env"]
-        written_input_path["path"] = env["SECURE_AGG_INPUT_FILE"]
-        output_path = env["SECURE_AGG_OUTPUT_FILE"]
-
-        # Simulate the real binary: read the (already-summed, single-client
-        # here) x/a pair per element and "reveal" it by just decoding what a
-        # single-share reconstruction would give -- since there's only one
-        # client, the party's own share IS the full reveal input for this
-        # test's purposes; write back the known correct plaintext instead of
-        # re-deriving cryptographically, since this test is about the FILE
-        # FORMAT glue, not the cross-process protocol (covered by the
-        # slow_hpmpc_build e2e tier).
-        with open(written_input_path["path"], "rb") as f:
+        with open(env["SECURE_AGG_INPUT_FILE"], "rb") as f:
             (num_elements,) = struct.unpack("<I", f.read(4))
-            f.read(16 * num_elements)  # consume the (x, a) pairs
-
-        raw_fixedpoint = codec.encode(plaintext)
-        with open(output_path, "wb") as f:
-            f.write(struct.pack("<I", len(raw_fixedpoint)))
-            f.write(struct.pack(f"<{len(raw_fixedpoint)}Q", *(int(v) & 0xFFFFFFFFFFFFFFFF for v in raw_fixedpoint)))
-
+            rows = [struct.unpack("<QQ", f.read(16)) for _ in range(num_elements)]
+        with open(env["SECURE_AGG_OUTPUT_FILE"], "wb") as f:
+            f.write(struct.pack("<I", num_elements))
+            for row in rows:
+                f.write(struct.pack("<QQ", *row))
         return _FakeProcess()
 
     with patch("asyncio.create_subprocess_exec", side_effect=fake_create_subprocess_exec):
@@ -452,7 +445,10 @@ async def test_run_aggregation_round_writes_correct_input_file_and_decodes_outpu
         )
 
     assert set(result.keys()) == {"w"}
-    assert np.allclose(result["w"].numpy(), plaintext, atol=1e-3)
+    assert result["w"].party_index == 0
+    x_out, a_out = result["w"].payload
+    assert x_out.tolist() == expected_x.tolist()
+    assert a_out.tolist() == expected_a.tolist()
     # input/output files get cleaned up after a successful round
     assert not tmp_path.joinpath("tmp").exists() or not any(tmp_path.joinpath("tmp").iterdir())
 
@@ -495,12 +491,14 @@ async def test_run_aggregation_round_writes_correct_trio_input_file_for_party_0(
             (num_elements,) = struct.unpack("<I", f.read(4))
             rows = [struct.unpack("<QQ", f.read(16)) for _ in range(num_elements)]
         captured["rows"] = rows
-        # Output element count must match tensor_specs ("w" has 2 elements)
-        # -- this test only cares about the INPUT file's bytes, so the
-        # output values themselves are arbitrary placeholders.
+        # Output must be num_elements rows of the same 2-field (p1, p2)
+        # layout as the input (no reveal anymore -- see backend_hpmpc.py's
+        # module docstring); this test only cares about the INPUT file's
+        # bytes, so the output values themselves are arbitrary placeholders.
         with open(env["SECURE_AGG_OUTPUT_FILE"], "wb") as f:
             f.write(struct.pack("<I", num_elements))
-            f.write(struct.pack(f"<{num_elements}Q", *([0] * num_elements)))
+            for _ in range(num_elements):
+                f.write(struct.pack("<QQ", 0, 0))
         return _FakeProcess()
 
     with patch("asyncio.create_subprocess_exec", side_effect=fake_create_subprocess_exec):
@@ -546,9 +544,13 @@ async def test_run_aggregation_round_writes_correct_tetrad_input_file_for_party_
             (num_elements,) = struct.unpack("<I", f.read(4))
             rows = [struct.unpack("<QQQ", f.read(24)) for _ in range(num_elements)]
         captured["rows"] = rows
+        # Output must be num_elements rows of the same 3-field layout as
+        # the input (no reveal anymore) -- placeholder values, since this
+        # test only checks the INPUT file's bytes.
         with open(env["SECURE_AGG_OUTPUT_FILE"], "wb") as f:
             f.write(struct.pack("<I", num_elements))
-            f.write(struct.pack(f"<{num_elements}Q", *([0] * num_elements)))
+            for _ in range(num_elements):
+                f.write(struct.pack("<QQQ", 0, 0, 0))
         return _FakeProcess()
 
     with patch("asyncio.create_subprocess_exec", side_effect=fake_create_subprocess_exec):
@@ -810,16 +812,17 @@ def test_own_fragment_extracts_first_field_only():
 
 
 @pytest.mark.asyncio
-async def test_run_mpc_product_round_writes_per_client_fragments_and_decodes_product(tmp_path):
-    # End-to-end (mocked subprocess) check of the mpc_product file format:
-    # 2 clients, one real weight layer + the dataset-size pseudo-layer, RAW
-    # (unweighted) values. The fake subprocess reads back party 0's own
-    # fragments, asserts they match _own_fragment's extraction directly from
-    # the SAME Replicated3PCScheme shares, then writes back a "revealed"
-    # output computed independently in plaintext (sum of weight_i *
-    # dataset_size_i, encoded at 2x frac_bits -- see
-    # mult_fedavg_secure_aggregation.hpp's module docstring for why) so this
-    # test also exercises HpmpcBackend's own decode-at-double-scale logic.
+async def test_run_mpc_product_round_writes_per_client_fragments_and_returns_raw_share(tmp_path):
+    # Mocked-subprocess check of the mpc_product file format: 2 clients, one
+    # real weight layer + the dataset-size pseudo-layer, RAW (unweighted)
+    # values. The fake subprocess reads back party 0's own fragments,
+    # asserts they match _own_fragment's extraction directly from the SAME
+    # Replicated3PCScheme shares, then writes back ARBITRARY-but-known raw
+    # Trio (p1, p2) rows -- no reveal happens anymore (see
+    # backend_hpmpc.py's module docstring), so this test checks those rows
+    # come back unmodified, split per layer, as PartyShare objects -- not
+    # that they decode to any particular plaintext (that composition is
+    # covered by test_reconstruct.py and the real end-to-end Docker runs).
     backend = _make_mult_backend(tmp_path, party_index=0)
     await backend.start([])
 
@@ -851,13 +854,11 @@ async def test_run_mpc_product_round_writes_per_client_fragments_and_decodes_pro
         DATASET_SIZE_LAYER_NAME: TensorSpec(layer_name=DATASET_SIZE_LAYER_NAME, shape=(1,), dtype="float64"),
     }
 
-    expected_raw_product = np.zeros(2, dtype=np.int64)
-    expected_total_ds_fp = 0
-    for data in clients.values():
-        w_fp = codec.encode(data["weights"]).astype(np.int64)
-        ds_fp = int(codec.encode(np.array([data["dataset_size"]]))[0])
-        expected_raw_product += w_fp * ds_fp
-        expected_total_ds_fp += ds_fp
+    # Arbitrary placeholder (p1, p2) rows -- one per weight element, plus one
+    # for the dataset-size field -- standing in for whatever this party's
+    # own post-multiply-and-sum Trio share would really be.
+    fake_output_rows = [(111, 222), (333, 444)]
+    fake_ds_row = (555, 666)
 
     captured = {}
 
@@ -883,13 +884,9 @@ async def test_run_mpc_product_round_writes_per_client_fragments_and_decodes_pro
 
         with open(env["SECURE_AGG_OUTPUT_FILE"], "wb") as f:
             f.write(struct.pack("<I", elements_per_client))
-            f.write(
-                struct.pack(
-                    f"<{elements_per_client}Q",
-                    *(int(v) & 0xFFFFFFFFFFFFFFFF for v in expected_raw_product.tolist()),
-                )
-            )
-            f.write(struct.pack("<Q", expected_total_ds_fp & 0xFFFFFFFFFFFFFFFF))
+            for row in fake_output_rows:
+                f.write(struct.pack("<QQ", *row))
+            f.write(struct.pack("<QQ", *fake_ds_row))
         return _FakeProcess()
 
     with patch("asyncio.create_subprocess_exec", side_effect=fake_create_subprocess_exec):
@@ -904,8 +901,11 @@ async def test_run_mpc_product_round_writes_per_client_fragments_and_decodes_pro
         assert ds_fragment == int(expected_party0_ds_fragment[client_id][0])
 
     assert set(result.keys()) == {"w", DATASET_SIZE_LAYER_NAME}
-    expected_product_plaintext = expected_raw_product.astype(np.float64) / float(1 << (2 * 13))
-    assert np.allclose(result["w"].numpy(), expected_product_plaintext, atol=1e-3)
-    assert result[DATASET_SIZE_LAYER_NAME].item() == pytest.approx(150.0)
+    assert result["w"].party_index == 0
+    p1_out, p2_out = result["w"].payload
+    assert p1_out.tolist() == [row[0] for row in fake_output_rows]
+    assert p2_out.tolist() == [row[1] for row in fake_output_rows]
+    ds_p1_out, ds_p2_out = result[DATASET_SIZE_LAYER_NAME].payload
+    assert (ds_p1_out.tolist(), ds_p2_out.tolist()) == ([fake_ds_row[0]], [fake_ds_row[1]])
     # input/output files get cleaned up after a successful round
     assert not tmp_path.joinpath("tmp").exists() or not any(tmp_path.joinpath("tmp").iterdir())

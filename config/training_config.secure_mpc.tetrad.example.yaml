@@ -11,9 +11,10 @@
 #
 # Otherwise identical to training_config.secure_mpc.example.yaml (protocol=2)
 # and what protocol=5 (Trio) also reuses unchanged -- only aggregator_args
-# (num_parties, sharing_scheme, party_endpoints) differs, since protocol
-# itself is a per-party backend.hpmpc.protocol config value, not something
-# this session-level config states directly.
+# (num_parties, sharing_scheme, party_endpoints, protocol) differs.
+# aggregator_args.protocol must match every party's backend.hpmpc.protocol
+# -- flo_server needs it to know which reveal formula to reconstruct with
+# (see server/secure_agg/reconstruct.py).
 
 session_config:
   session_id: mnist_lenet5_secure_mpc_tetrad
@@ -22,6 +23,7 @@ session_config:
   aggregator_args:
     sharing_scheme: tetrad4pc
     num_parties: 4
+    protocol: 8
     party_endpoints:
       - {party_index: 0, host: secure_agg_party0, port: 50100}
       - {party_index: 1, host: secure_agg_party1, port: 50101}
@@ -29,7 +31,6 @@ session_config:
       - {party_index: 3, host: secure_agg_party3, port: 50103}
     fixed_point: {bitlength: 64, frac_bits: 13}
     round_timeout_s: 120
-    verify_party_agreement: True
   client_selection: fedavg
   client_selection_args:
     client_fraction: 1

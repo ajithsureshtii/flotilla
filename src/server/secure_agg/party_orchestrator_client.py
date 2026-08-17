@@ -1,6 +1,9 @@
 """flo_server-side helper used by aggregation/aggregator_secure_mpc.py to
 fan a completed round's client weights out to all configured party servers
-and collect the revealed plaintext aggregate.
+and collect each party's own raw SHARE of the result (never plaintext --
+see backend_hpmpc.py's module docstring). aggregator_secure_mpc.py
+reconstructs the plaintext itself via server/secure_agg/reconstruct.py,
+using every party's share collected here.
 
 Deliberately a plain, SYNCHRONOUS function. aggregator_fedavg.py's (and
 therefore aggregator_secure_mpc.py's) `aggregate()` is called synchronously
@@ -17,7 +20,6 @@ import pickle
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import grpc
-import torch
 
 import proto.secure_agg_pb2 as secure_agg_pb2
 import proto.secure_agg_pb2_grpc as secure_agg_pb2_grpc
@@ -52,14 +54,26 @@ def run_round(
     client_ids,
     party_endpoints,
     timeout_s,
-    verify_party_agreement=True,
 ):
     """Trigger RunAggregationRound on every party in `party_endpoints` and
-    return the plaintext RAW (not yet divided by total weight — see
-    backends/base.py's run_aggregation_round docstring) aggregate as an
-    OrderedDict[str, torch.Tensor], including the revealed
-    DATASET_SIZE_LAYER_NAME entry (see aggregator_secure_mpc.py, which pops
-    and uses it as the division total).
+    return (shares_by_party, tensor_specs):
+      - shares_by_party: dict[party_index -> OrderedDict[layer_name ->
+        PartyShare]] -- every party's own raw share of the (still-secret)
+        result, keyed by `party_index` so aggregator_secure_mpc.py can pass
+        it straight to server/secure_agg/reconstruct.py.
+      - tensor_specs: dict[layer_name -> TensorSpec] (shape/dtype per
+        layer), taken from an arbitrary one of the parties' responses --
+        identical across all of them (same model), and needed by
+        aggregator_secure_mpc.py to reshape/cast what it reconstructs,
+        since a raw share carries no shape information of its own.
+
+    Unlike an earlier version of this function, there is no
+    `verify_party_agreement` parameter anymore: parties no longer reveal
+    anything among themselves, so there is no shared plaintext for this
+    function to compare across parties. The equivalent sanity check now
+    happens at reconstruction time (reconstruct.py's dual-formula
+    cross-check, run on the shares collected here), which needs no extra
+    network round-trip since it reuses what this function already gathered.
 
     `client_ids`: which clients' buffered shares this round should include.
     Deliberately NOT accompanied by per-client weights — flo_server doesn't
@@ -72,12 +86,6 @@ def run_round(
     genuinely needs every party's participation (unlike offline
     reconstruction, which only needs a threshold of shares); see
     docs/secure_aggregation/threat_model.md's "no fault tolerance" note.
-
-    `verify_party_agreement`: if True (default), cross-checks every party
-    revealed the same plaintext before returning it — a liveness/
-    correctness sanity check for catching bugs, not a security guarantee
-    (see aggregator_args.verify_party_agreement in
-    docs/secure_aggregation/design.md).
     """
     with ThreadPoolExecutor(max_workers=max(1, len(party_endpoints))) as pool:
         futures = {
@@ -96,7 +104,7 @@ def run_round(
         for future in as_completed(futures):
             endpoint = futures[future]
             try:
-                results[endpoint["host"], endpoint["port"]] = future.result()
+                results[endpoint["party_index"]] = future.result()
             except Exception as e:
                 errors.append((endpoint, e))
 
@@ -110,13 +118,6 @@ def run_round(
             "docs/secure_aggregation/runbook.md's 'Debugging a hung round'."
         )
 
-    reference = next(iter(results.values()))
-    if verify_party_agreement:
-        for other in list(results.values())[1:]:
-            for layer_name, tensor in reference.items():
-                if not torch.allclose(tensor, other[layer_name], atol=1e-4):
-                    raise RuntimeError(
-                        f"party disagreement on round {round_id}, layer {layer_name}"
-                    )
-
-    return reference
+    shares_by_party = {party_index: result["shares"] for party_index, result in results.items()}
+    tensor_specs = next(iter(results.values()))["tensor_specs"]
+    return shares_by_party, tensor_specs

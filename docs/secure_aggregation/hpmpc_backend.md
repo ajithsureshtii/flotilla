@@ -1,5 +1,20 @@
 # hpmpc backend
 
+**Reveal-removal redesign note:** the reveal formulas derived throughout
+this document (`secret = ...` invariants for each protocol) are still
+exactly correct and still the whole basis for how reconstruction works —
+what changed is WHERE they execute. Parties no longer call
+`prepare_reveal_to_all()`/`complete_reveal_to_all()` at all; each exports
+its own raw share fields (the SAME `(x,a)`/`(p1,p2)`/`(mv,l0,l1)` fields
+these derivations are about) directly, and `flo_server` applies these same
+formulas itself, in pure Python, via
+[`reconstruct.py`](../../src/server/secure_agg/reconstruct.py) — see
+[`threat_model.md`](threat_model.md)'s trust-model change note for why.
+The "File contract" and "How this was verified" sections below describe
+the CURRENT (post-redesign) behavior; the derivations of each protocol's
+reveal formula are unaffected and still the authoritative reference for
+what `reconstruct.py` implements.
+
 **Status: Phase 4 complete; multi-protocol support in progress.**
 `backend_hpmpc.py` is implemented and verified end-to-end against real
 compiled hpmpc binaries (multi-client, multi-layer, negative and
@@ -174,11 +189,11 @@ from a raw `(x, a)` pair only compiles for the live instantiation.
 output-file write) with `if constexpr (std::is_same_v<Share,
 Replicated_Share<DATATYPE>>)` — discarded entirely (not just skipped) for
 the init-phase instantiation, which is what makes it compile at all. Both
-phases still run the identical sequence of
-`prepare_reveal_to_all`/`communicate`/`complete_reveal_to_all` calls (one
-per element) — that's what keeps the init phase's buffer-size bookkeeping
-consistent with what the live phase actually sends over the wire; summing
-itself needs no such bookkeeping since it's local/free.
+phases run the identical (zero) number of communication-bearing calls —
+since reveal was removed (see the note at the top of this document), this
+program does no inter-party communication at all for the client_side
+weighting mode; summing itself needs no bookkeeping either, since it's
+local/free.
 
 ## File contract
 
@@ -189,8 +204,11 @@ input file:  uint32 elements_per_client
              model-weight element (all layers concatenated, sorted by
              layer_name for a deterministic order).
 output file: uint32 elements_per_client
-             then that many uint64 values -- the revealed raw ring
-             representation of the sum (decode via FixedPointCodec).
+             then that many (uint64 x, uint64 a) pairs -- this party's OWN
+             raw share of that same sum, in the identical layout as the
+             input (no reveal happens -- see the note at the top of this
+             document). flo_server reconstructs the plaintext from every
+             party's output file via reconstruct.py; NOT decoded here.
 ```
 
 Both file paths are passed via `SECURE_AGG_INPUT_FILE`/`SECURE_AGG_OUTPUT_FILE`
@@ -472,11 +490,28 @@ value redundantly held by two parties and cross-checked via
 party — every party reported `success=True`, and the *only* thing that
 caught the corruption was `party_orchestrator_client.py`'s own
 `verify_party_agreement` cross-check (comparing the 4 parties' revealed
-values against each other), which its own docstring already states
-explicitly is a **correctness/liveness sanity check, not a security
+values against each other), which its own docstring already stated
+explicitly was a **correctness/liveness sanity check, not a security
 guarantee** — a genuinely malicious party controlling its own gRPC response
 could simply lie about its result instead of returning an honestly-computed
 (and disagreeing) value, defeating this check entirely.
+
+**Update, post reveal-removal redesign** (see `threat_model.md`'s
+trust-model note): `verify_party_agreement` no longer exists — parties
+don't reveal among themselves anymore, so there is no shared plaintext
+across parties to compare. The conceptually similar replacement is
+`server/secure_agg/reconstruct.py`'s dual-formula cross-check, run at
+flo_server on the raw shares it collects. **This has NOT been
+independently re-verified against the same real corruption experiment
+described above** — whether it would catch the identical
+redundant-value-corruption scenario depends on whether the corrupted field
+happens to differ between the two independent reconstruction paths
+(Tetrad's cross-check currently only varies which of P0/P1's `mv` is used,
+always reading P3's `l1`/`l2`/`l3` the same way, so a corruption isolated
+to those fields might not be caught by the current dual-formula check
+either). Re-running the same corruption experiment against the
+post-redesign code is a natural follow-up, not yet done — treat this as an
+open, stated risk rather than an assumed-fixed one.
 
 The leading hypothesis, traced from `protocols/Protocols.h`: Tetrad's
 `PROTOCOL_INIT` (the init-phase stub class used only to size the

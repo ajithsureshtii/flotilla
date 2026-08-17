@@ -151,7 +151,12 @@ def test_run_aggregation_round_succeeds_and_clears_the_buffer_afterward():
     )
 
     assert response.success is True
-    assert pickle.loads(response.aggregated_model) == {"w": "aggregated-value"}
+    # Bundled with tensor_specs alongside the backend's raw-share result --
+    # see party_server.py's RunAggregationRound docstring for why flo_server
+    # needs this now (it no longer receives an already-shaped tensor).
+    unpickled = pickle.loads(response.aggregated_model)
+    assert unpickled["shares"] == {"w": "aggregated-value"}
+    assert "w" in unpickled["tensor_specs"]
     assert share_state.get("s1:0.shares") is None
     assert share_state.get("s1:0.specs") is None
     assert backend.calls[0]["round_id"] == "s1:0"

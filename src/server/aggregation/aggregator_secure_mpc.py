@@ -1,5 +1,11 @@
-from server.secure_agg import party_orchestrator_client
+from collections import OrderedDict
+
+import numpy as np
+import torch
+
+from server.secure_agg import party_orchestrator_client, reconstruct
 from server.secure_agg.constants import DATASET_SIZE_LAYER_NAME
+from server.secure_agg.fixed_point_codec import FixedPointCodec
 from utils.logger import FedLogger
 
 
@@ -30,9 +36,29 @@ def aggregate(
     shares should already be sitting in every party's share buffer. This
     function only tracks which clients have "checked in" for the round and,
     once all expected clients have, triggers the party cluster to run the
-    round and reveal the aggregate — it returns whatever that reveals,
-    exactly like aggregator_fedavg.aggregate returns its own plaintext
-    computation.
+    round, THEN RECONSTRUCTS THE PLAINTEXT ITSELF from every party's raw
+    share (see server/secure_agg/reconstruct.py) — the compute parties no
+    longer reveal anything among themselves (see backend_hpmpc.py's module
+    docstring and docs/secure_aggregation/threat_model.md for the
+    resulting trust-model consequence: flo_server, not the party cluster,
+    is now the one place plaintext is ever computed).
+
+    `args` (aggregator_args in session config), for the hpmpc backend, must
+    include `protocol` (2, 5, or 8 — must match every party's
+    backend.hpmpc.protocol) and `fixed_point` (`{bitlength, frac_bits}` —
+    must match every party's fixed_point config), in addition to the
+    existing `party_endpoints`/`round_timeout_s`. `weighting_mode` (default
+    `"client_side"`) must match every party's backend.hpmpc.weighting_mode
+    and every client's secure_aggregation.weighting_mode; see
+    docs/secure_aggregation/mult_fedavg.md.
+
+    If `args` has no `protocol` key, this function assumes the configured
+    backend still reveals internally and returns already-decoded plaintext
+    layers directly (SimulatorBackend's behavior — a pure-Python reference/
+    testing tool that predates, and is out of scope for, the reveal-removal
+    redesign the hpmpc backend went through; see backend_simulator.py's
+    module docstring) — in that case the first party's own returned value
+    IS the final plaintext, taken as-is, with no reconstruct.py involved.
     """
     logger = FedLogger(id=session_id, loggername="AGGREGATOR")
     logger.info(
@@ -86,28 +112,59 @@ def aggregate(
         round_no = int(training_session.get(f"{session_id}.last_round_number"))
         round_id = f"{session_id}:{round_no}"
 
-        # Each client pre-multiplied its update by its own (raw) dataset size
-        # before sharing (see client_secure_agg_manager.py) precisely so the
-        # party cluster never needs to scalar-multiply a share by a
-        # fractional weight — it only ever sums shares and reveals. What
-        # comes back here is therefore the RAW weighted sum
-        # (sum(N_k * update_k)) for every real model layer, PLUS a revealed
-        # DATASET_SIZE_LAYER_NAME entry — sum(N_k) across every checked-in
-        # client, summed and revealed by the same generic mechanism, since
-        # clients secret-share their raw dataset size too (see
-        # client_secure_agg_manager.py). Neither flo_server nor any party
-        # ever learns an individual client's dataset size — only this
-        # round's total, which is exactly the denominator needed to turn the
-        # raw weighted sum into the final average, done here in plaintext
-        # after reveal, mirroring aggregator_fedavg.py's N_k weighting.
-        raw_sum = party_orchestrator_client.run_round(
+        # Each party returns its OWN raw share of the result (never
+        # plaintext) plus tensor_specs (shape/dtype per layer, identical
+        # across parties) -- see party_orchestrator_client.run_round's
+        # docstring.
+        shares_by_party, tensor_specs = party_orchestrator_client.run_round(
             session_id=session_id,
             round_id=round_id,
             client_ids=checked_in_clients,
             party_endpoints=args["party_endpoints"],
             timeout_s=args.get("round_timeout_s", 120),
-            verify_party_agreement=args.get("verify_party_agreement", True),
         )
+
+        if "protocol" in args:
+            protocol = args["protocol"]
+            bitlength = args["fixed_point"]["bitlength"]
+            frac_bits = args["fixed_point"]["frac_bits"]
+            weighting_mode = args.get("weighting_mode", "client_side")
+            mask = np.uint64((1 << bitlength) - 1)
+            codec = FixedPointCodec(bitlength=bitlength, frac_bits=frac_bits)
+
+            # Reconstruct every layer (including DATASET_SIZE_LAYER_NAME)
+            # from the shares just collected, via each protocol's own
+            # reveal formula reimplemented in pure Python (reconstruct.py)
+            # -- with a built-in dual-formula cross-check (the replacement
+            # for the old party-side verify_party_agreement, since parties
+            # can no longer agree on a plaintext they never see).
+            raw_sum = OrderedDict()
+            for layer_name, spec in tensor_specs.items():
+                payload_by_party = {
+                    party_index: layer_shares[layer_name].payload
+                    for party_index, layer_shares in shares_by_party.items()
+                }
+                reconstructed_ring = reconstruct.reconstruct(protocol, payload_by_party, mask)
+                # weighting_mode="mpc_product"'s real layers carry an
+                # UNTRUNCATED product (2*frac_bits fractional precision --
+                # see mult_fedavg_secure_aggregation.hpp's module
+                # docstring); DATASET_SIZE_LAYER_NAME is always a plain
+                # sum, decoded at the normal scale regardless of
+                # weighting_mode.
+                if weighting_mode == "mpc_product" and layer_name != DATASET_SIZE_LAYER_NAME:
+                    decoded = reconstructed_ring.astype(np.int64).astype(np.float64) / float(
+                        1 << (2 * frac_bits)
+                    )
+                else:
+                    decoded = codec.decode(reconstructed_ring.astype(np.int64))
+                layer_values = decoded.reshape(spec.shape)
+                raw_sum[layer_name] = torch.from_numpy(layer_values.astype(np.dtype(spec.dtype)))
+        else:
+            # No "protocol" configured -- the backend already reveals
+            # internally (SimulatorBackend) and every party's returned
+            # value is already the same final plaintext; take any one of
+            # them as-is. See this function's docstring.
+            raw_sum = next(iter(shares_by_party.values()))
 
         total_dataset_size = round(float(raw_sum.pop(DATASET_SIZE_LAYER_NAME).item()))
         if total_dataset_size <= 0:

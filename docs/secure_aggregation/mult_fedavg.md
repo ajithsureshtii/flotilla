@@ -5,6 +5,16 @@ binaries (both a standalone C++ harness and the real `HpmpcBackend` Python
 class, driving real subprocesses over real localhost sockets) — see
 "How this was verified" below. Trio (`PROTOCOL=5`) only.**
 
+**Post reveal-removal redesign** (see
+[`threat_model.md`](threat_model.md)'s trust-model change note): this
+variant no longer reveals its result among the compute parties either —
+Round 5 below was originally a reveal round and is now a plain local
+export of each party's own raw share, reconstructed only at `flo_server`
+via [`reconstruct.py`](../../src/server/secure_agg/reconstruct.py). The
+"Protocol, per round", "File contract", and "Why the aggregator needed
+zero changes" sections below reflect this; see their notes for what
+changed from the original reveal-based design.
+
 ## Motivation
 
 The existing secure-aggregation design (see [`design.md`](design.md) and
@@ -100,12 +110,19 @@ field at `2*frac_bits` instead of `frac_bits`.
 4. **Local sum across clients** (no communication): plain
    `Additive_Share::operator+`, both for the per-element products and for
    the dataset sizes.
-5. **Reveal round.** `prepare_reveal_to_all()` for the summed product vector
-   and the summed dataset size, one `communicate()`.
+5. **Export, no reveal.** Each party writes its own raw Trio `(p1, p2)`
+   share of the summed product vector and the summed dataset size directly
+   to the output file — no `prepare_reveal_to_all()`, no `communicate()`.
+   `flo_server` reconstructs the plaintext from every party's exported
+   share afterward (see "Why the aggregator needed zero changes" below,
+   which despite its title now documents what DID need to change).
 
-Three `communicate()` rounds total for the live computation — this is the
-genuine inter-party communication this variant exists to exercise, as
-opposed to the default mode's single reveal-only round.
+Two `communicate()` rounds total for the live computation (native-input,
+then multiply) — this is the genuine inter-party communication this
+variant exists to exercise, as opposed to the default mode's zero
+inter-party communication (see `fedavg_secure_aggregation.hpp`'s module
+docstring: once reveal was removed, presummed shares need no communication
+at all).
 
 ## File contract
 
@@ -131,18 +148,22 @@ for each of num_clients clients, in a fixed (round-stable) order:
                                       dataset size
 ```
 
-**Output file:**
+**Output file (this party's own raw Trio share of the result — NOT
+revealed):**
 ```
 uint32 elements_per_client
-elements_per_client x uint64   -- revealed sum-across-clients of
-                                  weight_i*dataset_size_i, RAW (2*frac_bits
-                                  fractional precision -- decode
+elements_per_client x (p1, p2) uint64 pairs -- this party's own raw Trio
+                                  share of sum-across-clients of
+                                  weight_i*dataset_size_i. RAW/untruncated
+                                  (2*frac_bits fractional precision once
+                                  reconstructed at flo_server -- decode
                                   accordingly, not via FixedPointCodec's
                                   single frac_bits)
-1 x uint64                     -- revealed sum-across-clients of
-                                  dataset_size_i (normal frac_bits -- decode
-                                  like the existing DATASET_SIZE_LAYER_NAME
-                                  field)
+1 x (p1, p2) uint64 pair       -- this party's own raw Trio share of
+                                  sum-across-clients of dataset_size_i
+                                  (normal frac_bits once reconstructed --
+                                  decode like the existing
+                                  DATASET_SIZE_LAYER_NAME field)
 ```
 
 ## Configuration
@@ -194,31 +215,38 @@ Builds `executables/trio_mult/run-P{0,1,2}.o` and writes
 `executables/trio_mult/mult_fedavg_secure_aggregation.build_metadata.json`
 (`function_identifier: 91`).
 
-## Why the aggregator needed zero changes
+## Why the aggregator needed zero *mult_fedavg-specific* changes
 
-`aggregator_secure_mpc.py`, `party_orchestrator_client.py`, and
-`party_server.py` are all unchanged by this variant — verified by tracing,
-not just asserted:
+This section originally described why `aggregator_secure_mpc.py`,
+`party_orchestrator_client.py`, and `party_server.py` needed zero changes
+for `mult_fedavg` specifically, back when both weighting modes still
+revealed among the compute parties. That reveal step was later removed
+project-wide (see the redesign note at the top of this document) — those
+three files DID change, but identically for both weighting modes, not
+because of anything `mult_fedavg`-specific. The point that still holds:
+nothing in this chain needed a *second*, `mult_fedavg`-specific code path
+on top of the shared reveal-removal redesign:
 
 - `party_server.py`'s `RunAggregationRound` forwards `shares`/`tensor_specs`
   to whatever backend is configured and pickles back whatever
-  `OrderedDict` it returns — no assumptions about *how* that dict was
-  produced.
-- `party_orchestrator_client.py`'s `run_round` cross-checks that every
-  party returned the same tensors for the same layer names — also
-  backend-agnostic.
-- `aggregator_secure_mpc.py` pops `DATASET_SIZE_LAYER_NAME` out of the
-  returned dict and divides every remaining layer by it. Since
-  `HpmpcBackend._run_mpc_product_round` returns an `OrderedDict` with
-  exactly that same shape (real layers holding the revealed
-  `Sum(w_i*d_i)`, plus a `DATASET_SIZE_LAYER_NAME` entry holding the
-  revealed `Sum(d_i)`), dividing the two in plaintext gives the correct
-  weighted average with no code changes needed anywhere in this chain.
+  `OrderedDict` (of raw `PartyShare`s, post-redesign) it returns, bundled
+  with `tensor_specs` — no assumptions about *how* that dict was produced,
+  whether by `_run_client_side_round` or `_run_mpc_product_round`.
+- `party_orchestrator_client.py`'s `run_round` collects every party's raw
+  share dict, backend-agnostically, into `shares_by_party`.
+- `aggregator_secure_mpc.py` reconstructs each layer via
+  `server/secure_agg/reconstruct.py` (protocol-specific, not
+  weighting-mode-specific), then branches ONLY on `weighting_mode` for the
+  decode SCALE (`2*frac_bits` for `mpc_product`'s real layers vs.
+  `frac_bits` everywhere else) before dividing by the reconstructed
+  `DATASET_SIZE_LAYER_NAME` total exactly as before. This one `if
+  weighting_mode == "mpc_product"` branch is the only
+  `mult_fedavg`-specific logic anywhere above the backend boundary.
 
-The entire feature is scoped to `backend_hpmpc.py` (a new private method,
-`_run_mpc_product_round`, dispatched from the existing
-`run_aggregation_round`) plus one conditional in
-`client_secure_agg_manager.py`.
+The feature-specific work is scoped to `backend_hpmpc.py` (the
+`_run_mpc_product_round` method), `mult_fedavg_secure_aggregation.hpp`,
+one conditional in `client_secure_agg_manager.py`, and that one decode-scale
+branch in `aggregator_secure_mpc.py`.
 
 ## Known limitations
 
@@ -231,15 +259,21 @@ The entire feature is scoped to `backend_hpmpc.py` (a new private method,
   correctly with multiplication, have not been checked) before being wired
   in. `HpmpcBackend` raises `ValueError` at construction if
   `weighting_mode="mpc_product"` is requested with any other protocol.
-- **More communication than the default mode.** 3 `communicate()` rounds
-  per aggregation round vs. 1 for the default (reveal-only) mode — this is
-  inherent to the feature's purpose, not an inefficiency to fix.
+- **More communication than the default mode.** 2 `communicate()` rounds
+  per aggregation round (native-input, multiply) vs. 0 for the default
+  mode (post reveal-removal, presummed shares need no communication at
+  all) — this is inherent to the feature's purpose, not an inefficiency to
+  fix.
 - **No in-MPC truncation.** As explained above, this is a deliberate choice
   (Trio's truncated-multiply completion is a broken stub anyway), not a
   gap — decoding at `2*frac_bits` on the Python side is exact for this use
   case.
 
 ## How this was verified
+
+Items 1-4 below verified the original reveal-based design. After the
+reveal-removal redesign (see the note at the top of this document), the
+raw-export version was independently re-verified — see item 5.
 
 1. **Standalone C++ harness** (scratch, not committed): a minimal hpmpc
    program performing the native-input round + multiply + reveal for
@@ -270,4 +304,16 @@ The entire feature is scoped to `backend_hpmpc.py` (a new private method,
    check, `_own_fragment`'s extraction logic, the mpc_product file-packing
    and decode-at-double-scale logic (mocked subprocess, real
    `Replicated3PCScheme` shares), and the client-side pre-weighting
-   skip. All pass alongside the full existing suite (132 unit tests).
+   skip. All pass alongside the full existing suite (132 unit tests, at
+   the time this item was written).
+5. **Post reveal-removal re-verification**, real Docker, real compiled
+   `trio_mult` binaries, both directly (raw `(p1, p2)` output bytes fed
+   through the same Trio reveal formula in pure Python:
+   `secret = P2.p1 - P0.p2`) and through the real `HpmpcBackend` Python
+   class end-to-end (`weighting_mode="mpc_product"`, real subprocesses,
+   real localhost sockets, `reconstruct.reconstruct(5, ...)`): a 2-client,
+   2-element scenario (`weights=[2.0,-3.5], dataset_size=10` and
+   `weights=[1.0,4.0], dataset_size=20`) reconstructed to the exact
+   expected `[40.0, 45.0]` product and `30.0` total dataset size on all 3
+   parties, confirming the raw-export + flo_server-reconstruct path is
+   numerically identical to the original reveal-based path it replaced.
