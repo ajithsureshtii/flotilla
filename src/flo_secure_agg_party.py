@@ -8,6 +8,7 @@ import grpc
 
 import proto.secure_agg_pb2_grpc as secure_agg_pb2_grpc
 from server.secure_agg.backends.base import PartyEndpoint
+from server.secure_agg.constants import GRPC_MESSAGE_SIZE_LIMIT_BYTES
 from server.secure_agg.fixed_point_codec import FixedPointCodec
 from server.secure_agg.load_backend import load_backend
 from server.secure_agg.load_sharing_scheme import load_sharing_scheme
@@ -140,7 +141,13 @@ def main():
         backend=backend,
     )
 
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=config.get("grpc_workers", 8)))
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=config.get("grpc_workers", 8)),
+        options=[
+            ("grpc.max_send_message_length", GRPC_MESSAGE_SIZE_LIMIT_BYTES),
+            ("grpc.max_receive_message_length", GRPC_MESSAGE_SIZE_LIMIT_BYTES),
+        ],
+    )
     secure_agg_pb2_grpc.add_SecureAggPartyServiceServicer_to_server(servicer, server)
     server.add_insecure_port(f"{bind_host}:{config['bind_port']}")
     server.start()

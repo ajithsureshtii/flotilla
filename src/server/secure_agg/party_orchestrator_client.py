@@ -23,10 +23,16 @@ import grpc
 
 import proto.secure_agg_pb2 as secure_agg_pb2
 import proto.secure_agg_pb2_grpc as secure_agg_pb2_grpc
+from server.secure_agg.constants import GRPC_MESSAGE_SIZE_LIMIT_BYTES
+
+_GRPC_CHANNEL_OPTIONS = [
+    ("grpc.max_send_message_length", GRPC_MESSAGE_SIZE_LIMIT_BYTES),
+    ("grpc.max_receive_message_length", GRPC_MESSAGE_SIZE_LIMIT_BYTES),
+]
 
 
 def _call_one_party(endpoint, session_id, round_id, client_ids, timeout_s):
-    channel = grpc.insecure_channel(f"{endpoint['host']}:{endpoint['port']}")
+    channel = grpc.insecure_channel(f"{endpoint['host']}:{endpoint['port']}", options=_GRPC_CHANNEL_OPTIONS)
     try:
         stub = secure_agg_pb2_grpc.SecureAggPartyServiceStub(channel)
         response = stub.RunAggregationRound(

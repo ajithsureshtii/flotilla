@@ -40,10 +40,15 @@ import numpy as np
 
 import proto.secure_agg_pb2 as secure_agg_pb2
 import proto.secure_agg_pb2_grpc as secure_agg_pb2_grpc
-from server.secure_agg.constants import DATASET_SIZE_LAYER_NAME
+from server.secure_agg.constants import DATASET_SIZE_LAYER_NAME, GRPC_MESSAGE_SIZE_LIMIT_BYTES
 from server.secure_agg.fixed_point_codec import FixedPointCodec
 from server.secure_agg.load_sharing_scheme import load_sharing_scheme
 from utils.logger import FedLogger
+
+_GRPC_CHANNEL_OPTIONS = [
+    ("grpc.max_send_message_length", GRPC_MESSAGE_SIZE_LIMIT_BYTES),
+    ("grpc.max_receive_message_length", GRPC_MESSAGE_SIZE_LIMIT_BYTES),
+]
 
 
 def share_and_submit(
@@ -112,7 +117,7 @@ def share_and_submit(
         )
 
     for endpoint in party_endpoints:
-        channel = grpc.insecure_channel(f"{endpoint['host']}:{endpoint['port']}")
+        channel = grpc.insecure_channel(f"{endpoint['host']}:{endpoint['port']}", options=_GRPC_CHANNEL_OPTIONS)
         try:
             stub = secure_agg_pb2_grpc.SecureAggPartyServiceStub(channel)
             ack = stub.SubmitShare(

@@ -61,7 +61,7 @@ class FloSessionManager:
             "max_message_length"
         ]
         self.grpc_opts: list = [
-            ("grpc.max_send_message_lenght", grpc_max_message_length),
+            ("grpc.max_send_message_length", grpc_max_message_length),
             ("grpc.max_receive_message_length", grpc_max_message_length),
             ("grpc.so_reuseport", 0),
             ("grpc.so_readdr", 0),

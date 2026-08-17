@@ -34,8 +34,14 @@ import torch
 import proto.secure_agg_pb2 as secure_agg_pb2
 import proto.secure_agg_pb2_grpc as secure_agg_pb2_grpc
 from server.secure_agg.backends.base import SecureAggregationBackend
+from server.secure_agg.constants import GRPC_MESSAGE_SIZE_LIMIT_BYTES
 from server.secure_agg.fixed_point_codec import FixedPointCodec
 from server.secure_agg.sharing_schemes.base import PartyShare, SecretSharingScheme
+
+_GRPC_OPTIONS = [
+    ("grpc.max_send_message_length", GRPC_MESSAGE_SIZE_LIMIT_BYTES),
+    ("grpc.max_receive_message_length", GRPC_MESSAGE_SIZE_LIMIT_BYTES),
+]
 
 
 def run_in_process(
@@ -168,7 +174,7 @@ class SimulatorBackend(SecureAggregationBackend):
 
     async def start(self, peer_endpoints):
         self._peer_endpoints = list(peer_endpoints)
-        self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
+        self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4), options=_GRPC_OPTIONS)
         secure_agg_pb2_grpc.add_SecureAggPeerServiceServicer_to_server(
             _PeerServicer(self), self._server
         )
@@ -228,7 +234,7 @@ class SimulatorBackend(SecureAggregationBackend):
         raise RuntimeError(f"no peer endpoint configured for party {next_index}")
 
     async def _fetch_peer_share(self, peer, round_id, timeout_s):
-        channel = grpc.insecure_channel(f"{peer.host}:{peer.port}")
+        channel = grpc.insecure_channel(f"{peer.host}:{peer.port}", options=_GRPC_OPTIONS)
         stub = secure_agg_pb2_grpc.SecureAggPeerServiceStub(channel)
         deadline = time.monotonic() + timeout_s
         try:
